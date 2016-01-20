@@ -22,13 +22,22 @@ import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.plugins.JavaPluginConvention
 import org.gradle.api.plugins.scala.ScalaBasePlugin
 import org.gradle.internal.reflect.Instantiator
+import org.gradle.jvm.plugins.JvmComponentPlugin
+import org.gradle.model.internal.registry.ModelRegistry
 import org.gradle.plugins.ide.api.XmlFileContentMerger
 import org.gradle.plugins.ide.idea.internal.IdeaNameDeduper
 import org.gradle.plugins.ide.idea.internal.IdeaScalaConfigurer
 import org.gradle.plugins.ide.idea.model.*
 import org.gradle.plugins.ide.internal.IdePlugin
+import org.gradle.plugins.ide.model.internal.JvmIdeModel
+import org.gradle.plugins.ide.model.internal.JvmIdeModelRules
+import org.gradle.plugins.ide.model.internal.JvmIdeSourceDirKind
 
 import javax.inject.Inject
+
+import static JvmIdeModelRules.ideModelFor
+import static org.gradle.plugins.ide.model.internal.JvmIdeSourceDirKind.PRODUCTION
+import static org.gradle.plugins.ide.model.internal.JvmIdeSourceDirKind.TEST
 
 /**
  * Adds a GenerateIdeaModule task. When applied to a root project, also adds a GenerateIdeaProject task.
@@ -36,10 +45,12 @@ import javax.inject.Inject
  */
 class IdeaPlugin extends IdePlugin {
     private final Instantiator instantiator
+    private final ModelRegistry modelRegistry
     private IdeaModel ideaModel
 
     @Inject
-    IdeaPlugin(Instantiator instantiator) {
+    IdeaPlugin(Instantiator instantiator, ModelRegistry modelRegistry) {
+        this.modelRegistry = modelRegistry
         this.instantiator = instantiator
     }
 
@@ -131,12 +142,11 @@ class IdeaPlugin extends IdePlugin {
 
             ideaModel.module = module
 
-            module.conventionMapping.sourceDirs = { [] as LinkedHashSet }
             module.conventionMapping.name = { project.name }
             module.conventionMapping.contentRoot = { project.projectDir }
-            module.conventionMapping.testSourceDirs = { [] as LinkedHashSet }
+            module.conventionMapping.sourceDirs = { defaultSourceDirsFor(PRODUCTION) }
+            module.conventionMapping.testSourceDirs = { defaultSourceDirsFor(TEST) }
             module.conventionMapping.excludeDirs = { [project.buildDir, project.file('.gradle')] as LinkedHashSet }
-
             module.conventionMapping.pathFactory = {
                 PathFactory factory = new PathFactory()
                 factory.addPathVariable('MODULE_DIR', outputFile.parentFile)
@@ -145,9 +155,39 @@ class IdeaPlugin extends IdePlugin {
                 }
                 factory
             }
+            if (!hasPlugin(JavaPlugin)) {
+                module.conventionMapping.singleEntryLibraries = {
+                    def classpath = defaultTestClasspath().toSet()
+                    [
+                        RUNTIME: [],
+                        TEST: classpath
+                    ]
+                }
+            }
         }
 
         addWorker(task)
+    }
+
+    private LinkedHashSet<File> defaultSourceDirsFor(JvmIdeSourceDirKind dirKind) {
+        def ideModel = findIdeModel()
+        if (ideModel != null) {
+            ideModel.sourceDirsByKind(dirKind) as LinkedHashSet
+        } else {
+            [] as LinkedHashSet
+        }
+    }
+
+    private JvmIdeModel findIdeModel() {
+        if (!hasPlugin(JvmComponentPlugin))
+            return null
+        if (!hasPlugin(JvmIdeModelRules))
+            project.plugins.apply(JvmIdeModelRules)
+        return ideModelFor(modelRegistry)
+    }
+
+    private boolean hasPlugin(Class<?> plugin) {
+        project.plugins.hasPlugin(plugin)
     }
 
     private configureForJavaPlugin(Project project) {
@@ -175,6 +215,15 @@ class IdeaPlugin extends IdePlugin {
             dependsOn {
                 project.sourceSets.main.output.dirs + project.sourceSets.test.output.dirs
             }
+        }
+    }
+
+    private Iterable<File> defaultTestClasspath() {
+        def ideModel = findIdeModel()
+        if (ideModel != null) {
+            ideModel.testClasspath
+        } else {
+            []
         }
     }
 
