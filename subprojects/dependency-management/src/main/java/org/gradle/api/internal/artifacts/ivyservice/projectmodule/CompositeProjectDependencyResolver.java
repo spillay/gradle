@@ -19,14 +19,14 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
+import org.gradle.api.artifacts.component.CompositeProjectComponentIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentSelector;
-import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.VersionSelectionReasons;
 import org.gradle.api.internal.component.ArtifactType;
 import org.gradle.api.internal.tasks.DefaultTaskDependency;
+import org.gradle.internal.component.local.model.DefaultCompositeProjectComponentIdentifier;
 import org.gradle.internal.component.local.model.DefaultLocalComponentMetaData;
-import org.gradle.internal.component.local.model.DefaultProjectComponentIdentifier;
 import org.gradle.internal.component.local.model.LocalComponentMetaData;
 import org.gradle.internal.component.model.*;
 import org.gradle.internal.resolve.resolver.ArtifactResolver;
@@ -81,7 +81,7 @@ public class CompositeProjectDependencyResolver implements ComponentMetaDataReso
 
     private LocalComponentMetaData buildProjectComponentMetadata(String projectPath, Set<String> configurations) {
         ModuleVersionIdentifier moduleVersionIdentifier = DefaultModuleVersionIdentifier.newId("org", projectPath, "??");
-        ComponentIdentifier componentIdentifier = new DefaultProjectComponentIdentifier(projectPath);
+        ComponentIdentifier componentIdentifier = new DefaultCompositeProjectComponentIdentifier(projectPath);
         DefaultLocalComponentMetaData metadata = new DefaultLocalComponentMetaData(moduleVersionIdentifier, componentIdentifier, "integration");
         for (String moduleConfiguration : configurations) {
             metadata.addConfiguration(moduleConfiguration, "", Collections.<String>emptySet(), Collections.<String>emptySet(), true, true, new DefaultTaskDependency());
@@ -102,22 +102,21 @@ public class CompositeProjectDependencyResolver implements ComponentMetaDataReso
     }
 
     public void resolveModuleArtifacts(ComponentResolveMetaData component, ArtifactType artifactType, BuildableArtifactSetResolveResult result) {
-        if (isProjectModule(component.getComponentId())) {
+        if (isCompositeProjectId(component.getComponentId())) {
             throw new UnsupportedOperationException("Resolving artifacts by type is not yet supported for project modules");
         }
     }
 
     public void resolveModuleArtifacts(ComponentResolveMetaData component, ComponentUsage usage, BuildableArtifactSetResolveResult result) {
-        if (isProjectModule(component.getComponentId())) {
-            throw new UnsupportedOperationException();
-//            String configurationName = usage.getConfigurationName();
-//            Set<ComponentArtifactMetaData> artifacts = component.getConfiguration(configurationName).getArtifacts();
-//            result.resolved(artifacts);
+        if (isCompositeProjectId(component.getComponentId())) {
+            String configurationName = usage.getConfigurationName();
+            Set<ComponentArtifactMetaData> artifacts = component.getConfiguration(configurationName).getArtifacts();
+            result.resolved(artifacts);
         }
     }
 
     public void resolveArtifact(ComponentArtifactMetaData component, ModuleSource moduleSource, BuildableArtifactResolveResult result) {
-        if (isProjectModule(component.getComponentId())) {
+        if (isCompositeProjectId(component.getComponentId())) {
             throw new UnsupportedOperationException();
 //            LocalComponentArtifactIdentifier id = (LocalComponentArtifactIdentifier) component.getId();
 //            File localArtifactFile = id.getFile();
@@ -129,7 +128,7 @@ public class CompositeProjectDependencyResolver implements ComponentMetaDataReso
         }
     }
 
-    private boolean isProjectModule(ComponentIdentifier componentId) {
-        return componentId instanceof ProjectComponentIdentifier;
+    private boolean isCompositeProjectId(ComponentIdentifier componentId) {
+        return componentId instanceof CompositeProjectComponentIdentifier;
     }
 }
