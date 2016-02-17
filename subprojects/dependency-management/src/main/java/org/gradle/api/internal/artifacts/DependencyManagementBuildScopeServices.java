@@ -31,10 +31,7 @@ import org.gradle.api.internal.artifacts.ivyservice.modulecache.ModuleArtifactsC
 import org.gradle.api.internal.artifacts.ivyservice.modulecache.ModuleMetaDataCache;
 import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.ConfigurationComponentMetaDataBuilder;
 import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies.DependencyDescriptorFactory;
-import org.gradle.api.internal.artifacts.ivyservice.projectmodule.DefaultProjectComponentRegistry;
-import org.gradle.api.internal.artifacts.ivyservice.projectmodule.DefaultProjectPublicationRegistry;
-import org.gradle.api.internal.artifacts.ivyservice.projectmodule.ProjectDependencyResolver;
-import org.gradle.api.internal.artifacts.ivyservice.projectmodule.ProjectPublicationRegistry;
+import org.gradle.api.internal.artifacts.ivyservice.projectmodule.*;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.DefaultArtifactDependencyResolver;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.store.ResolutionResultsStoreFactory;
 import org.gradle.api.internal.artifacts.mvnsettings.*;
@@ -239,6 +236,32 @@ class DependencyManagementBuildScopeServices {
         private final ProjectDependencyResolver resolver;
 
         public ProjectResolverProviderFactory(ProjectDependencyResolver resolver) {
+            this.resolver = resolver;
+        }
+
+        @Override
+        public boolean canCreate(ResolveContext context) {
+            return true;
+        }
+
+        @Override
+        public ComponentResolvers create(ResolveContext context) {
+            return DelegatingComponentResolvers.of(resolver);
+        }
+    }
+
+    CompositeProjectDependencyResolver createCompositeDependencyResolver() {
+        return new CompositeProjectDependencyResolver();
+    }
+
+    ResolverProviderFactory createCompositeResolverProviderFactory(final CompositeProjectDependencyResolver resolver) {
+        return new CompositeProjectResolverProviderFactory(resolver);
+    }
+
+    private static class CompositeProjectResolverProviderFactory implements ResolverProviderFactory {
+        private final CompositeProjectDependencyResolver resolver;
+
+        public CompositeProjectResolverProviderFactory(CompositeProjectDependencyResolver resolver) {
             this.resolver = resolver;
         }
 
