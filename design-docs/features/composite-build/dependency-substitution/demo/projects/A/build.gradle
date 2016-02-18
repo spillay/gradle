@@ -6,7 +6,9 @@ group = 'org'
 version = '1.0'
 
 dependencies {
+    compile 'log4j:log4j:1.2.17'
     compile 'org:y:1.0'
+    compile 'org:z:1.0'
 }
 
 repositories {

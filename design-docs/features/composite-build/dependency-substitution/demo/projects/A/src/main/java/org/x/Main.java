@@ -1,6 +1,8 @@
 package org.x;
 
-public class Main {
+import org.z.Api;
+
+public class Main implements Api {
    public static void main(String... args) {
       System.out.println("Answer is " + org.y.Util.getAnswer());
    }
