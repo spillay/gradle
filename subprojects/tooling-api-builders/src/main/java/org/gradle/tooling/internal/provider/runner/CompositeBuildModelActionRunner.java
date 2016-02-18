@@ -16,6 +16,7 @@
 
 package org.gradle.tooling.internal.provider.runner;
 
+import com.google.common.collect.Maps;
 import org.gradle.initialization.BuildCancellationToken;
 import org.gradle.initialization.BuildRequestContext;
 import org.gradle.internal.Cast;
@@ -34,8 +35,13 @@ import org.gradle.tooling.internal.provider.BuildModelAction;
 import org.gradle.tooling.internal.provider.PayloadSerializer;
 import org.gradle.tooling.internal.provider.connection.CompositeParameters;
 import org.gradle.tooling.internal.provider.connection.GradleParticipantBuild;
+import org.gradle.tooling.model.GradleModuleVersion;
+import org.gradle.tooling.model.GradleProject;
 import org.gradle.tooling.model.HierarchicalElement;
 import org.gradle.tooling.model.eclipse.EclipseProject;
+import org.gradle.tooling.model.gradle.GradlePublication;
+import org.gradle.tooling.model.gradle.ProjectPublications;
+import org.gradle.util.GFileUtils;
 
 import java.io.File;
 import java.util.*;
@@ -46,6 +52,45 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         this.put(SetOfEclipseProjects.class.getName(), EclipseProject.class);
     }};
 
+    class CompositeContext {
+        private final Map<String, String> mappings = Maps.newHashMap();
+    }
+
+    private CompositeContext buildContext(List<GradleParticipantBuild> participantBuilds, Set<GradleProject> gradleProjects, Set<ProjectPublications> publications) {
+        assert gradleProjects.size() == publications.size() && participantBuilds.size()==gradleProjects.size(); // TODO: doesn't support multi-project builds yet
+        CompositeContext context = new CompositeContext();
+        // TODO: Don't rely on particular ordering
+        Iterator<GradleParticipantBuild> participantBuildIterator = participantBuilds.iterator();
+        Iterator<GradleProject> gradleProjectsIterator = gradleProjects.iterator();
+        Iterator<ProjectPublications> projectPublicationsIterator = publications.iterator();
+        while (gradleProjectsIterator.hasNext()) {
+            GradleParticipantBuild participantBuild = participantBuildIterator.next();
+            String participantBuildName = participantBuild.getProjectDir().getName(); // TODO: Give participant builds names
+            GradleProject gradleProject = gradleProjectsIterator.next();
+            ProjectPublications projectPublications = projectPublicationsIterator.next();
+            for (GradlePublication publication : projectPublications.getPublications().getAll()) {
+                GradleModuleVersion gradleModuleVersion = publication.getId();
+                context.mappings.put(gradleModuleVersion.getGroup() + ":" + gradleModuleVersion.getName(), participantBuildName + ":" + gradleProject.getPath());
+            }
+        }
+
+        return context;
+    }
+
+    private File generateInitScriptFromContext(CompositeContext context) {
+        if (context!=null) {
+            // TODO: Hack, goes away when we start registering these directly in the build
+            File initScript = new File("/tmp/init.gradle");
+            StringBuilder sb = new StringBuilder();
+            sb.append("def context = services.get(org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeBuildContext)\n");
+            for (Map.Entry<String, String> e : context.mappings.entrySet()) {
+                sb.append("context.register('").append(e.getKey()).append("', '").append(e.getValue()).append("')\n");
+            }
+            GFileUtils.writeStringToFile(initScript, sb.toString());
+            return initScript;
+        }
+        return null;
+    }
 
     @Override
     public void run(BuildAction action, BuildRequestContext requestContext, CompositeBuildActionParameters actionParameters, CompositeBuildController buildController) {
@@ -67,18 +112,30 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
     private Set<Object> aggregateModels(Class<? extends HierarchicalElement> modelType, CompositeBuildActionParameters actionParameters, BuildCancellationToken cancellationToken) {
         Set<Object> results = new LinkedHashSet<Object>();
         final CompositeParameters compositeParameters = actionParameters.getCompositeParameters();
-        results.addAll(fetchModels(compositeParameters.getBuilds(), modelType, cancellationToken, compositeParameters.getGradleUserHomeDir(), compositeParameters.getDaemonBaseDir(), compositeParameters.getDaemonMaxIdleTimeValue(), compositeParameters.getDaemonMaxIdleTimeUnits()));
+        final List<GradleParticipantBuild> participantBuilds = compositeParameters.getBuilds();
+        File gradleUserHomeDir = compositeParameters.getGradleUserHomeDir();
+        File daemonBaseDir = compositeParameters.getDaemonBaseDir();
+        Integer daemonMaxIdleTimeValue = compositeParameters.getDaemonMaxIdleTimeValue();
+        TimeUnit daemonMaxIdleTimeUnits = compositeParameters.getDaemonMaxIdleTimeUnits();
+        final Set<GradleProject> gradleProjects = fetchModels(participantBuilds, GradleProject.class, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits, null);
+        final Set<ProjectPublications> publications = fetchModels(participantBuilds, ProjectPublications.class, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits, null);
+        CompositeContext context = buildContext(participantBuilds, gradleProjects, publications);
+        results.addAll(fetchModels(compositeParameters.getBuilds(), modelType, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits, context));
         return results;
     }
 
-    private <T extends HierarchicalElement> Set<T> fetchModels(List<GradleParticipantBuild> participantBuilds, Class<T> modelType, final BuildCancellationToken cancellationToken, File gradleUserHomeDir, File daemonBaseDir, Integer daemonMaxIdleTimeValue, TimeUnit daemonMaxIdleTimeUnits) {
+    private <T> Set<T> fetchModels(List<GradleParticipantBuild> participantBuilds, Class<T> modelType, final BuildCancellationToken cancellationToken, File gradleUserHomeDir, File daemonBaseDir, Integer daemonMaxIdleTimeValue, TimeUnit daemonMaxIdleTimeUnits, CompositeContext context) {
         final Set<T> results = new LinkedHashSet<T>();
+        final File initScript = generateInitScriptFromContext(context);
         for (GradleParticipantBuild participant : participantBuilds) {
             if (cancellationToken.isCancellationRequested()) {
                 break;
             }
             ProjectConnection projectConnection = connect(participant, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits);
             ModelBuilder<T> modelBuilder = projectConnection.model(modelType);
+            if (initScript!=null) {
+                modelBuilder.withArguments("-I", initScript.getAbsolutePath());
+            }
             modelBuilder.withCancellationToken(new CancellationTokenAdapter(cancellationToken));
             if (cancellationToken.isCancellationRequested()) {
                 projectConnection.close();
@@ -95,10 +152,12 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         return results;
     }
 
-    private <T extends HierarchicalElement> void accumulate(Set<T> allResults, HierarchicalElement element) {
+    private <T> void accumulate(Set<T> allResults, Object element) {
         allResults.add(Cast.<T>uncheckedCast(element));
-        for (HierarchicalElement child : element.getChildren().getAll()) {
-            accumulate(allResults, child);
+        if (element instanceof HierarchicalElement) {
+            for (Object child : ((HierarchicalElement)element).getChildren().getAll()) {
+                accumulate(allResults, child);
+            }
         }
     }
 
