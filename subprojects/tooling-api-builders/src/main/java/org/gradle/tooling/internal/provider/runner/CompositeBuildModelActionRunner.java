@@ -17,6 +17,7 @@
 package org.gradle.tooling.internal.provider.runner;
 
 import com.google.common.collect.Maps;
+import org.gradle.api.specs.Spec;
 import org.gradle.initialization.BuildCancellationToken;
 import org.gradle.initialization.BuildRequestContext;
 import org.gradle.internal.Cast;
@@ -38,10 +39,13 @@ import org.gradle.tooling.internal.provider.connection.GradleParticipantBuild;
 import org.gradle.tooling.model.GradleModuleVersion;
 import org.gradle.tooling.model.GradleProject;
 import org.gradle.tooling.model.HierarchicalElement;
+import org.gradle.tooling.model.build.BuildEnvironment;
 import org.gradle.tooling.model.eclipse.EclipseProject;
 import org.gradle.tooling.model.gradle.GradlePublication;
 import org.gradle.tooling.model.gradle.ProjectPublications;
+import org.gradle.util.CollectionUtils;
 import org.gradle.util.GFileUtils;
+import org.gradle.util.GradleVersion;
 
 import java.io.File;
 import java.util.*;
@@ -92,6 +96,17 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         return null;
     }
 
+    private boolean supportsCompositeSubstitution(Set<BuildEnvironment> buildEnvironments) {
+        final GradleVersion minimumVersion = GradleVersion.version("2.11");
+        return CollectionUtils.every(buildEnvironments, new Spec<BuildEnvironment>() {
+            @Override
+            public boolean isSatisfiedBy(BuildEnvironment element) {
+                GradleVersion thisVersion = GradleVersion.version(element.getGradle().getGradleVersion());
+                return thisVersion.compareTo(minimumVersion) > 0;
+            }
+        });
+    }
+
     @Override
     public void run(BuildAction action, BuildRequestContext requestContext, CompositeBuildActionParameters actionParameters, CompositeBuildController buildController) {
         if (!(action instanceof BuildModelAction)) {
@@ -117,9 +132,13 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         File daemonBaseDir = compositeParameters.getDaemonBaseDir();
         Integer daemonMaxIdleTimeValue = compositeParameters.getDaemonMaxIdleTimeValue();
         TimeUnit daemonMaxIdleTimeUnits = compositeParameters.getDaemonMaxIdleTimeUnits();
-        final Set<GradleProject> gradleProjects = fetchModels(participantBuilds, GradleProject.class, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits, null);
-        final Set<ProjectPublications> publications = fetchModels(participantBuilds, ProjectPublications.class, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits, null);
-        CompositeContext context = buildContext(participantBuilds, gradleProjects, publications);
+        final Set<BuildEnvironment> buildEnvironments = fetchModels(participantBuilds, BuildEnvironment.class, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits, null);
+        CompositeContext context = null;
+        if (supportsCompositeSubstitution(buildEnvironments)) {
+            final Set<GradleProject> gradleProjects = fetchModels(participantBuilds, GradleProject.class, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits, null);
+            final Set<ProjectPublications> publications = fetchModels(participantBuilds, ProjectPublications.class, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits, null);
+            context = buildContext(participantBuilds, gradleProjects, publications);
+        }
         results.addAll(fetchModels(compositeParameters.getBuilds(), modelType, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits, context));
         return results;
     }
