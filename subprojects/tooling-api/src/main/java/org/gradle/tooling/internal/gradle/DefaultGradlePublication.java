@@ -28,6 +28,7 @@ public class DefaultGradlePublication implements Serializable {
     private GradleModuleVersion id;
     private Set<GradleModuleVersion> dependencies = Sets.newLinkedHashSet();
     private Set<File> artifacts = Sets.newLinkedHashSet();
+    private Set<String> tasks = Sets.newLinkedHashSet();
 
     public GradleModuleVersion getId() {
         return id;
@@ -41,6 +42,10 @@ public class DefaultGradlePublication implements Serializable {
         return artifacts;
     }
 
+    public Set<String> getTasks() {
+        return tasks;
+    }
+
     public void setId(GradleModuleVersion id) {
         this.id = id;
     }
@@ -51,6 +56,10 @@ public class DefaultGradlePublication implements Serializable {
 
     public void addArtifact(File artifact) {
         artifacts.add(artifact);
+    }
+
+    public void addTask(String task) {
+        tasks.add(task);
     }
 
     public String toString() {

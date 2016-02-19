@@ -18,6 +18,7 @@ package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 
 import com.google.common.base.Objects;
 import com.google.common.collect.Sets;
+import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
@@ -30,6 +31,7 @@ public class DefaultProjectPublication implements ProjectPublication {
     private final ModuleVersionIdentifier id;
     private final Set<ModuleVersionIdentifier> dependencies = Sets.newLinkedHashSet();
     private final Set<PublishArtifact> artifacts = Sets.newLinkedHashSet();
+    private final Set<Task> tasks = Sets.newLinkedHashSet();
 
     public DefaultProjectPublication(ModuleVersionIdentifier id) {
         this.id = id;
@@ -47,6 +49,7 @@ public class DefaultProjectPublication implements ProjectPublication {
             }
         }
         artifacts.addAll(conf.getAllArtifacts());
+        tasks.addAll(conf.getAllArtifacts().getBuildDependencies().getDependencies(null));
     }
 
     public ModuleVersionIdentifier getId() {
@@ -61,6 +64,11 @@ public class DefaultProjectPublication implements ProjectPublication {
     @Override
     public Set<PublishArtifact> getArtifacts() {
         return artifacts;
+    }
+
+    @Override
+    public Set<Task> getTasks() {
+        return tasks;
     }
 
     @Override

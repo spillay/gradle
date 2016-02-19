@@ -39,4 +39,6 @@ public interface GradlePublication {
     Set<GradleModuleVersion> getDependencies();
 
     Set<File> getArtifacts();
+
+    Set<String> getTasks();
 }
