@@ -17,11 +17,16 @@ package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import org.gradle.api.artifacts.ModuleIdentifier;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.component.CompositeProjectComponentIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentSelector;
+import org.gradle.api.internal.artifacts.DefaultModuleIdentifier;
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier;
+import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency;
+import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies.DefaultExcludeRuleConverter;
+import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies.ExternalModuleIvyDependencyDescriptorFactory;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.VersionSelectionReasons;
 import org.gradle.api.internal.component.ArtifactType;
 import org.gradle.api.internal.tasks.DefaultTaskDependency;
@@ -37,25 +42,23 @@ import org.gradle.internal.resolve.result.BuildableArtifactSetResolveResult;
 import org.gradle.internal.resolve.result.BuildableComponentIdResolveResult;
 import org.gradle.internal.resolve.result.BuildableComponentResolveResult;
 
-import java.util.Collections;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public class CompositeProjectDependencyResolver implements ComponentMetaDataResolver, DependencyToComponentIdResolver, ArtifactResolver, CompositeBuildContext {
-    private final Map<String, String> mappings = Maps.newHashMap();
+    private final Map<String, RegisteredProjectPublication> mappings = Maps.newHashMap();
 
     public CompositeProjectDependencyResolver() {
     }
 
     @Override
-    public void register(String module, String projectPath) {
-        mappings.put(module, projectPath);
+    public void register(String module, String projectPath, List<String> dependencies) {
+        mappings.put(module, new RegisteredProjectPublication(module, projectPath, dependencies));
     }
 
     public void resolve(DependencyMetaData dependency, BuildableComponentIdResolveResult result) {
         if (dependency.getSelector() instanceof ModuleComponentSelector) {
             ModuleComponentSelector selector = (ModuleComponentSelector) dependency.getSelector();
-            String compositeTarget = findCompositeTarget(selector);
+            RegisteredProjectPublication compositeTarget = findCompositeTarget(selector);
             if (compositeTarget == null) {
                 return;
             }
@@ -74,17 +77,24 @@ public class CompositeProjectDependencyResolver implements ComponentMetaDataReso
         return configurations;
     }
 
-    private String findCompositeTarget(ModuleComponentSelector selector) {
+    private RegisteredProjectPublication findCompositeTarget(ModuleComponentSelector selector) {
         String candidate = selector.getGroup() + ":" + selector.getModule();
         return mappings.get(candidate);
     }
 
-    private LocalComponentMetaData buildProjectComponentMetadata(String projectPath, Set<String> configurations) {
-        ModuleVersionIdentifier moduleVersionIdentifier = DefaultModuleVersionIdentifier.newId("org", projectPath, "??");
+    private LocalComponentMetaData buildProjectComponentMetadata(RegisteredProjectPublication publication, Set<String> configurations) {
+        String projectPath = publication.projectPath;
+        ModuleVersionIdentifier moduleVersionIdentifier = new DefaultModuleVersionIdentifier(publication.moduleId, "1");
         ComponentIdentifier componentIdentifier = new DefaultCompositeProjectComponentIdentifier(projectPath);
         DefaultLocalComponentMetaData metadata = new DefaultLocalComponentMetaData(moduleVersionIdentifier, componentIdentifier, "integration");
-        for (String moduleConfiguration : configurations) {
-            metadata.addConfiguration(moduleConfiguration, "", Collections.<String>emptySet(), Collections.<String>emptySet(), true, true, new DefaultTaskDependency());
+
+        metadata.addConfiguration("compile", "", Collections.<String>emptySet(), Sets.newHashSet("compile"), true, true, new DefaultTaskDependency());
+        metadata.addConfiguration("default", "", Sets.newHashSet("compile"), Sets.newHashSet("compile", "default"), true, true, new DefaultTaskDependency());
+
+        for (ModuleVersionIdentifier dependency : publication.dependencies) {
+            DefaultExternalModuleDependency externalModuleDependency = new DefaultExternalModuleDependency(dependency.getGroup(), dependency.getName(), dependency.getVersion());
+            DependencyMetaData dependencyMetaData = new ExternalModuleIvyDependencyDescriptorFactory(new DefaultExcludeRuleConverter()).createDependencyDescriptor("compile", externalModuleDependency);
+            metadata.addDependency(dependencyMetaData);
         }
         return metadata;
     }
@@ -130,5 +140,21 @@ public class CompositeProjectDependencyResolver implements ComponentMetaDataReso
 
     private boolean isCompositeProjectId(ComponentIdentifier componentId) {
         return componentId instanceof CompositeProjectComponentIdentifier;
+    }
+
+    private static class RegisteredProjectPublication {
+        ModuleIdentifier moduleId;
+        String projectPath;
+        Set<ModuleVersionIdentifier> dependencies = Sets.newLinkedHashSet();
+
+        public RegisteredProjectPublication(String module, String projectPath, Collection<String> dependencies) {
+            String[] ga = module.split(":");
+            this.moduleId = DefaultModuleIdentifier.newId(ga[0], ga[1]);
+            this.projectPath = projectPath;
+            for (String dependency : dependencies) {
+                String[] gav = dependency.split(":");
+                this.dependencies.add(DefaultModuleVersionIdentifier.newId(gav[0], gav[1], gav[2]));
+            }
+        }
     }
 }
