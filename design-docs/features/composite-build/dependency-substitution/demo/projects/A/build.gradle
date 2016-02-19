@@ -1,5 +1,6 @@
 apply plugin: 'java'
 apply plugin: 'maven'
+apply plugin: 'eclipse'
 
 group = 'org'
 version = '1.0'
@@ -9,6 +10,7 @@ dependencies {
 }
 
 repositories {
+    mavenCentral()
     maven {
         url("file://" + file("../repo"))
     }
