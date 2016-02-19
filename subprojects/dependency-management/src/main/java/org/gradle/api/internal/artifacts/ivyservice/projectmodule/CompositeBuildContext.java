@@ -19,5 +19,5 @@ package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 import java.util.List;
 
 public interface CompositeBuildContext {
-    void register(String module, String projectPath, List<String> dependencies);
+    void register(String module, String projectPath, List<String> dependencies, List<String> artifactFiles);
 }

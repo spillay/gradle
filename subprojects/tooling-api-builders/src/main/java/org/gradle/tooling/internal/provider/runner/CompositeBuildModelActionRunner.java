@@ -16,9 +16,9 @@
 
 package org.gradle.tooling.internal.provider.runner;
 
-import com.google.common.collect.Maps;
+import com.beust.jcommander.internal.Lists;
+import com.beust.jcommander.internal.Sets;
 import org.apache.commons.lang.StringUtils;
-import org.gradle.api.Transformer;
 import org.gradle.api.specs.Spec;
 import org.gradle.initialization.BuildCancellationToken;
 import org.gradle.initialization.BuildRequestContext;
@@ -59,8 +59,7 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
     }};
 
     class CompositeContext {
-        private final Map<String, String> mappings = Maps.newHashMap();
-        private final Map<String, Set<String>> dependencies = Maps.newHashMap();
+        private final List<Registration> registrations = Lists.newArrayList();
     }
 
     private CompositeContext buildContext(List<GradleParticipantBuild> participantBuilds, Set<GradleProject> gradleProjects, Set<ProjectPublications> publications) {
@@ -78,14 +77,16 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
             for (GradlePublication publication : projectPublications.getPublications().getAll()) {
                 GradleModuleVersion gradleModuleVersion = publication.getId();
                 String module = gradleModuleVersion.getGroup() + ":" + gradleModuleVersion.getName();
-                context.mappings.put(module, participantBuildName + ":" + gradleProject.getPath());
-                System.out.println("Got dependencies for " + module + " : " + publication.getDependencies());
-                context.dependencies.put(module, CollectionUtils.collect(publication.getDependencies(), new Transformer<String, GradleModuleVersion>() {
-                    @Override
-                    public String transform(GradleModuleVersion gradleModuleVersion) {
-                        return gradleModuleVersion.getGroup() + ":" + gradleModuleVersion.getName() + ":" + gradleModuleVersion.getVersion();
-                    }
-                }));
+                Registration registration = new Registration();
+                registration.moduleId = module;
+                registration.projectPath = participantBuildName + ":" + gradleProject.getPath();
+                for (GradleModuleVersion depVersion : publication.getDependencies()) {
+                    registration.dependencies.add(depVersion.getGroup() + ":" + depVersion.getName() + ":" + depVersion.getVersion());
+                }
+                for (File artifactFile : publication.getArtifacts()) {
+                    registration.artifacts.add(artifactFile.getAbsolutePath());
+                }
+                context.registrations.add(registration);
             }
         }
 
@@ -98,16 +99,18 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
             File initScript = new File("/tmp/init.gradle");
             StringBuilder sb = new StringBuilder();
             sb.append("def context = services.get(org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeBuildContext)\n");
-            for (Map.Entry<String, String> e : context.mappings.entrySet()) {
-                Set<String> deps = context.dependencies.get(e.getKey());
-                String dependencyList = deps.isEmpty() ? "" :  "'" + StringUtils.join(deps, "', '") + "'";
-                String registration = String.format("context.register('%s', '%s', [%s])", e.getKey(), e.getValue(), dependencyList);
-                sb.append(registration).append("\n");
+            for (Registration registration : context.registrations) {
+                String reg = String.format("context.register('%s', '%s', [%s], [%s])", registration.moduleId, registration.projectPath, quoteAll(registration.dependencies), quoteAll(registration.artifacts));
+                sb.append(reg).append("\n");
             }
             GFileUtils.writeStringToFile(initScript, sb.toString());
             return initScript;
         }
         return null;
+    }
+
+    private String quoteAll(Set<String> deps) {
+        return deps.isEmpty() ? "" :  "'" + StringUtils.join(deps, "', '") + "'";
     }
 
     private boolean supportsCompositeSubstitution(Set<BuildEnvironment> buildEnvironments) {
@@ -248,6 +251,15 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         public BuildCancellationToken getToken() {
             return token;
         }
+    }
+
+    private static class Registration {
+        String moduleId;
+        String projectPath;
+        Set<String> dependencies = Sets.newHashSet();
+        Set<String> artifacts = Sets.newHashSet();
+
+
     }
 }
 

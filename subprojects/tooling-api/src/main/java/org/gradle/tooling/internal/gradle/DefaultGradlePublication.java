@@ -20,12 +20,14 @@ import com.google.common.base.Objects;
 import com.google.common.collect.Sets;
 import org.gradle.tooling.model.GradleModuleVersion;
 
+import java.io.File;
 import java.io.Serializable;
 import java.util.Set;
 
 public class DefaultGradlePublication implements Serializable {
     private GradleModuleVersion id;
     private Set<GradleModuleVersion> dependencies = Sets.newLinkedHashSet();
+    private Set<File> artifacts = Sets.newLinkedHashSet();
 
     public GradleModuleVersion getId() {
         return id;
@@ -35,12 +37,20 @@ public class DefaultGradlePublication implements Serializable {
         return dependencies;
     }
 
+    public Set<File> getArtifacts() {
+        return artifacts;
+    }
+
     public void setId(GradleModuleVersion id) {
         this.id = id;
     }
 
     public void addDependency(GradleModuleVersion id) {
         dependencies.add(id);
+    }
+
+    public void addArtifact(File artifact) {
+        artifacts.add(artifact);
     }
 
     public String toString() {

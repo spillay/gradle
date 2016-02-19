@@ -19,6 +19,7 @@ package org.gradle.plugins.ide.internal.tooling;
 import com.google.common.collect.Lists;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
+import org.gradle.api.artifacts.PublishArtifact;
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.ProjectPublication;
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.ProjectPublicationRegistry;
 import org.gradle.tooling.internal.gradle.DefaultGradleModuleVersion;
@@ -53,6 +54,9 @@ class PublicationsBuilder extends ProjectSensitiveToolingModelBuilder {
             publication.setId(new DefaultGradleModuleVersion(projectPublication.getId()));
             for (ModuleVersionIdentifier dependencyId : projectPublication.getDependencies()) {
                 publication.addDependency(new DefaultGradleModuleVersion(dependencyId));
+            }
+            for (PublishArtifact publishArtifact : projectPublication.getArtifacts()) {
+                publication.addArtifact(publishArtifact.getFile());
             }
             gradlePublications.add(publication);
         }

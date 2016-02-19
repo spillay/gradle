@@ -19,6 +19,7 @@ package org.gradle.tooling.model.gradle;
 import org.gradle.api.Incubating;
 import org.gradle.tooling.model.GradleModuleVersion;
 
+import java.io.File;
 import java.util.Set;
 
 /**
@@ -36,4 +37,6 @@ public interface GradlePublication {
     GradleModuleVersion getId();
 
     Set<GradleModuleVersion> getDependencies();
+
+    Set<File> getArtifacts();
 }

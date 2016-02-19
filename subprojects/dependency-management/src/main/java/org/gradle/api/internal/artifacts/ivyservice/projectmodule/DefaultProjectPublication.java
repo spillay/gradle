@@ -21,6 +21,7 @@ import com.google.common.collect.Sets;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
+import org.gradle.api.artifacts.PublishArtifact;
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier;
 
 import java.util.Set;
@@ -28,6 +29,7 @@ import java.util.Set;
 public class DefaultProjectPublication implements ProjectPublication {
     private final ModuleVersionIdentifier id;
     private final Set<ModuleVersionIdentifier> dependencies = Sets.newLinkedHashSet();
+    private final Set<PublishArtifact> artifacts = Sets.newLinkedHashSet();
 
     public DefaultProjectPublication(ModuleVersionIdentifier id) {
         this.id = id;
@@ -44,6 +46,7 @@ public class DefaultProjectPublication implements ProjectPublication {
                 }
             }
         }
+        artifacts.addAll(conf.getAllArtifacts());
     }
 
     public ModuleVersionIdentifier getId() {
@@ -53,6 +56,11 @@ public class DefaultProjectPublication implements ProjectPublication {
     @Override
     public Set<ModuleVersionIdentifier> getDependencies() {
         return dependencies;
+    }
+
+    @Override
+    public Set<PublishArtifact> getArtifacts() {
+        return artifacts;
     }
 
     @Override

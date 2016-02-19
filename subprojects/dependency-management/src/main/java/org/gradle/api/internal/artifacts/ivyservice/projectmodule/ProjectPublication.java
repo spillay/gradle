@@ -17,6 +17,7 @@
 package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
+import org.gradle.api.artifacts.PublishArtifact;
 
 import java.util.Set;
 
@@ -28,4 +29,5 @@ import java.util.Set;
 public interface ProjectPublication {
     ModuleVersionIdentifier getId();
     Set<ModuleVersionIdentifier> getDependencies();
+    Set<PublishArtifact> getArtifacts();
 }
