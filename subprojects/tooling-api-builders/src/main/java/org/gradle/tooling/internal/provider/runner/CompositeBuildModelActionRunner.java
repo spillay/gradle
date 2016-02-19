@@ -16,9 +16,10 @@
 
 package org.gradle.tooling.internal.provider.runner;
 
-import com.beust.jcommander.internal.Lists;
 import com.beust.jcommander.internal.Sets;
+import com.google.common.collect.Maps;
 import org.apache.commons.lang.StringUtils;
+import org.gradle.api.Transformer;
 import org.gradle.api.specs.Spec;
 import org.gradle.initialization.BuildCancellationToken;
 import org.gradle.initialization.BuildRequestContext;
@@ -39,10 +40,11 @@ import org.gradle.tooling.internal.provider.PayloadSerializer;
 import org.gradle.tooling.internal.provider.connection.CompositeParameters;
 import org.gradle.tooling.internal.provider.connection.GradleParticipantBuild;
 import org.gradle.tooling.model.GradleModuleVersion;
-import org.gradle.tooling.model.GradleProject;
 import org.gradle.tooling.model.HierarchicalElement;
 import org.gradle.tooling.model.build.BuildEnvironment;
 import org.gradle.tooling.model.eclipse.EclipseProject;
+import org.gradle.tooling.model.gradle.BasicGradleProject;
+import org.gradle.tooling.model.gradle.GradleBuild;
 import org.gradle.tooling.model.gradle.GradlePublication;
 import org.gradle.tooling.model.gradle.ProjectPublications;
 import org.gradle.util.CollectionUtils;
@@ -50,6 +52,7 @@ import org.gradle.util.GFileUtils;
 import org.gradle.util.GradleVersion;
 
 import java.io.File;
+import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -58,39 +61,8 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         this.put(SetOfEclipseProjects.class.getName(), EclipseProject.class);
     }};
 
-    class CompositeContext {
-        private final List<Registration> registrations = Lists.newArrayList();
-    }
-
-    private CompositeContext buildContext(List<GradleParticipantBuild> participantBuilds, Set<GradleProject> gradleProjects, Set<ProjectPublications> publications) {
-        assert gradleProjects.size() == publications.size() && participantBuilds.size()==gradleProjects.size(); // TODO: doesn't support multi-project builds yet
-        CompositeContext context = new CompositeContext();
-        // TODO: Don't rely on particular ordering
-        Iterator<GradleParticipantBuild> participantBuildIterator = participantBuilds.iterator();
-        Iterator<GradleProject> gradleProjectsIterator = gradleProjects.iterator();
-        Iterator<ProjectPublications> projectPublicationsIterator = publications.iterator();
-        while (gradleProjectsIterator.hasNext()) {
-            GradleParticipantBuild participantBuild = participantBuildIterator.next();
-            String participantBuildName = participantBuild.getProjectDir().getName(); // TODO: Give participant builds names
-            GradleProject gradleProject = gradleProjectsIterator.next();
-            ProjectPublications projectPublications = projectPublicationsIterator.next();
-            for (GradlePublication publication : projectPublications.getPublications().getAll()) {
-                GradleModuleVersion gradleModuleVersion = publication.getId();
-                String module = gradleModuleVersion.getGroup() + ":" + gradleModuleVersion.getName();
-                Registration registration = new Registration();
-                registration.moduleId = module;
-                registration.projectPath = participantBuildName + ":" + gradleProject.getPath();
-                for (GradleModuleVersion depVersion : publication.getDependencies()) {
-                    registration.dependencies.add(depVersion.getGroup() + ":" + depVersion.getName() + ":" + depVersion.getVersion());
-                }
-                for (File artifactFile : publication.getArtifacts()) {
-                    registration.artifacts.add(artifactFile.getAbsolutePath());
-                }
-                context.registrations.add(registration);
-            }
-        }
-
-        return context;
+    private static final class CompositeContext {
+        private final Map<String, PublicationSetForParticipant> publications = Maps.newHashMap();
     }
 
     private File generateInitScriptFromContext(CompositeContext context) {
@@ -99,9 +71,33 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
             File initScript = new File("/tmp/init.gradle");
             StringBuilder sb = new StringBuilder();
             sb.append("def context = services.get(org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeBuildContext)\n");
-            for (Registration registration : context.registrations) {
-                String reg = String.format("context.register('%s', '%s', [%s], [%s])", registration.moduleId, registration.projectPath, quoteAll(registration.dependencies), quoteAll(registration.artifacts));
-                sb.append(reg).append("\n");
+            for (Map.Entry<String, PublicationSetForParticipant> e : context.publications.entrySet()) {
+                String participantName = e.getKey();
+                PublicationSetForParticipant publicationSetForParticipant = e.getValue();
+                sb.append("// Publications from participant ").append(participantName).append("\n");
+                for (Map.Entry<String, ProjectPublications> publicationForProject : publicationSetForParticipant.projectsToPublication.entrySet()) {
+                    String projectPath = publicationForProject.getKey();
+                    ProjectPublications publications = publicationForProject.getValue();
+
+                    sb.append("// Publications from project with path ").append(projectPath).append("\n");
+                    for (GradlePublication publication : publications.getPublications().getAll()) {
+                        String compositePath = participantName + ":" + projectPath;
+                        Set<String> deps = CollectionUtils.collect(publication.getDependencies(), new Transformer<String, GradleModuleVersion>() {
+                            public String transform(GradleModuleVersion id) {
+                                return id.getGroup() + ":" + id.getName() + ":" + id.getVersion();
+                            }
+                        });
+                        Set<String> artifacts = CollectionUtils.collect(publication.getArtifacts(), new Transformer<String, File>() {
+                            @Override
+                            public String transform(File file) {
+                                return file.getAbsolutePath();
+                            }
+                        });
+                        String registration = String.format("context.register('%s', '%s', [%s], [%s])\n", groupName(publication.getId()), compositePath, quoteAll(deps), quoteAll(artifacts));
+                        sb.append(registration);
+                        sb.append("// Produced by tasks ").append(publication.getTasks()).append("\n");
+                    }
+                }
             }
             GFileUtils.writeStringToFile(initScript, sb.toString());
             return initScript;
@@ -110,7 +106,11 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
     }
 
     private String quoteAll(Set<String> deps) {
-        return deps.isEmpty() ? "" :  "'" + StringUtils.join(deps, "', '") + "'";
+        return deps.isEmpty() ? "" : "'" + StringUtils.join(deps, "', '") + "'";
+    }
+
+    private String groupName(GradleModuleVersion id) {
+        return id.getGroup() + ":" + id.getName();
     }
 
     private boolean supportsCompositeSubstitution(Set<BuildEnvironment> buildEnvironments) {
@@ -152,9 +152,7 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         final Set<BuildEnvironment> buildEnvironments = fetchModels(participantBuilds, BuildEnvironment.class, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits, null);
         CompositeContext context = null;
         if (supportsCompositeSubstitution(buildEnvironments)) {
-            final Set<GradleProject> gradleProjects = fetchModels(participantBuilds, GradleProject.class, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits, null);
-            final Set<ProjectPublications> publications = fetchModels(participantBuilds, ProjectPublications.class, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits, null);
-            context = buildContext(participantBuilds, gradleProjects, publications);
+            context = buildContext(participantBuilds, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits);
         }
         results.addAll(fetchModels(compositeParameters.getBuilds(), modelType, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits, context));
         return results;
@@ -186,6 +184,31 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
             }
         }
         return results;
+    }
+
+    private static final class PublicationSetForParticipant implements Serializable {
+        Map<String, ProjectPublications> projectsToPublication; // : or :x -> publications
+    }
+
+    private CompositeContext buildContext(List<GradleParticipantBuild> participantBuilds, final BuildCancellationToken cancellationToken, File gradleUserHomeDir, File daemonBaseDir, Integer daemonMaxIdleTimeValue, TimeUnit daemonMaxIdleTimeUnits) {
+        final CompositeContext context = new CompositeContext();
+        for (GradleParticipantBuild participant : participantBuilds) {
+            if (cancellationToken.isCancellationRequested()) {
+                break;
+            }
+            // TODO: Need to figure out a way to determine participant name
+            final String participantName = participant.getProjectDir().getName();
+            ProjectConnection projectConnection = connect(participant, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits);
+            try {
+                PublicationSetForParticipant result = projectConnection.action(new RetrievePublicationAction()).
+                    withCancellationToken(new CancellationTokenAdapter(cancellationToken)).
+                    run();
+                context.publications.put(participantName, result);
+            } finally {
+                projectConnection.close();
+            }
+        }
+        return context;
     }
 
     private <T> void accumulate(Set<T> allResults, Object element) {
@@ -261,5 +284,23 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
 
 
     }
-}
 
+    private final static class RetrievePublicationAction implements org.gradle.tooling.BuildAction<PublicationSetForParticipant> {
+        @Override
+        public PublicationSetForParticipant execute(BuildController controller) {
+            GradleBuild buildModel = controller.getBuildModel();
+            PublicationSetForParticipant publicationSetForParticipant = new PublicationSetForParticipant();
+            publicationSetForParticipant.projectsToPublication = new HashMap<String, ProjectPublications>();
+            accumulate(controller, buildModel.getRootProject(), publicationSetForParticipant);
+            return publicationSetForParticipant;
+        }
+
+        private void accumulate(BuildController controller, BasicGradleProject project, PublicationSetForParticipant result) {
+            ProjectPublications projectPublications = controller.getModel(project, ProjectPublications.class);
+            result.projectsToPublication.put(project.getPath(), projectPublications);
+            for (BasicGradleProject child : project.getChildren()) {
+                accumulate(controller, child, result);
+            }
+        }
+    }
+}

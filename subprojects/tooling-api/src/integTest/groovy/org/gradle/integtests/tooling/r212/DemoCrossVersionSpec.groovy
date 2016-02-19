@@ -16,12 +16,7 @@
 
 package org.gradle.integtests.tooling.r212
 
-import org.gradle.integtests.tooling.fixture.CompositeToolingApiSpecification
-import org.gradle.tooling.model.eclipse.EclipseProject
-
-class DemoCrossVersionSpec extends CompositeToolingApiSpecification {
-    def participantA, participantB
-
+class DemoCrossVersionSpec extends AbstractDemoCrossVersionSpec {
     def setup() {
         participantA = populate("A") {
             settingsFile << """
@@ -41,9 +36,12 @@ rootProject.name = "y"
             buildFile << buildFileContent()
         }
     }
+
     def "replaces external dependencies with project dependency in composite"() {
-        expect:
-        assertContainsProjectReplacement(getEclipseProjects(), participantA, "/B::", "org:y:1.0")
+        when:
+        def eclipseProjects = getEclipseProjects()
+        then:
+        assertContainsProjectReplacement(eclipseProjects, participantA, "/B::", "org:y:1.0")
     }
 
     def "gets transitive dependencies from replaced project dependency in composite"() {
@@ -53,73 +51,11 @@ dependencies {
    compile "log4j:log4j:1.2.17"
 }
 """
-        expect:
-        assertClasspathContains(eclipseProjects, participantA, "log4j:log4j:1.2.17")
+        when:
+        def eclipseProjects = getEclipseProjects()
+        then:
+        assertContainsProjectReplacement(eclipseProjects, participantA, "/B::", "org:y:1.0")
+        assertClasspathContains(getEclipseProjects(), participantA, "log4j:log4j:1.2.17")
 
-    }
-
-    Set<EclipseProject> getEclipseProjects() {
-        return withCompositeConnection([participantA, participantB]) { connection ->
-            connection.getModels(EclipseProject)
-        }
-    }
-
-    EclipseProject findConsumer(Set<EclipseProject> eclipseProjects, File consumerProjectDir) {
-        def consumerProject = eclipseProjects.find { it.gradleProject.projectDirectory == consumerProjectDir }
-        assert consumerProject
-        return consumerProject
-    }
-
-    def extractClasspath(EclipseProject consumerProject) {
-        def classpath = consumerProject.classpath.collect {
-            def module = it.gradleModuleVersion
-            if (module) {
-                module.group + ":" + module.name + ":" + module.version
-            } else {
-                it.file.absolutePath
-            }
-        }
-        classpath
-    }
-
-    void assertContainsProjectReplacement(Set<EclipseProject> eclipseProjects, File consumerProjectDir, String producerPath, String replacedDependency) {
-        def consumerProject = findConsumer(eclipseProjects, consumerProjectDir)
-
-        def projectDependencies = consumerProject.projectDependencies.collect { it.path }
-        def classpath = extractClasspath(consumerProject)
-
-        assert !classpath.contains(replacedDependency) && projectDependencies.contains(producerPath)
-    }
-
-    void assertClasspathContains(Set<EclipseProject> eclipseProjects, File consumerProjectDir, String dependency) {
-        def consumerProject = findConsumer(eclipseProjects, consumerProjectDir)
-        def classpath = extractClasspath(consumerProject)
-
-        assert classpath.contains(dependency)
-    }
-
-    String buildFileContent() {
-        return """
-apply plugin: 'java'
-apply plugin: 'maven'
-
-group = 'org'
-version = '1.0'
-
-repositories {
-    jcenter()
-    maven {
-        url("file://" + rootProject.file("../repo"))
-    }
-}
-
-uploadArchives {
-    repositories {
-        mavenDeployer {
-            repository(url: "file://" + rootProject.file("../repo"))
-        }
-    }
-}
-"""
     }
 }
