@@ -136,7 +136,7 @@ public class BasePlugin implements Plugin<Project> {
                 ModuleInternal module = configuration.getModule();
                 ModuleVersionIdentifier publicationId =
                         new DefaultModuleVersionIdentifier(module.getGroup(), module.getName(), module.getVersion());
-                publicationRegistry.registerPublication(module.getProjectPath(), new DefaultProjectPublication(publicationId));
+                publicationRegistry.registerPublication(module.getProjectPath(), new DefaultProjectPublication(publicationId, configuration));
             }
         });
     }

@@ -16,27 +16,60 @@
 
 package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 
+import com.google.common.base.Objects;
+import com.google.common.collect.Sets;
+import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
+import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier;
+
+import java.util.Set;
 
 public class DefaultProjectPublication implements ProjectPublication {
     private final ModuleVersionIdentifier id;
+    private final Set<ModuleVersionIdentifier> dependencies = Sets.newLinkedHashSet();
 
     public DefaultProjectPublication(ModuleVersionIdentifier id) {
         this.id = id;
+    }
+
+    public DefaultProjectPublication(ModuleVersionIdentifier id, Configuration conf) {
+        this.id = id;
+        // Should be properly mapping project dependencies to coordinates
+        for (Configuration configuration : conf.getAll()) {
+            // Should be using the supplied configuration
+            if (configuration.getName().equals(Dependency.DEFAULT_CONFIGURATION)) {
+                for (Dependency dependency : configuration.getAllDependencies()) {
+                    dependencies.add(DefaultModuleVersionIdentifier.newId(dependency.getGroup(), dependency.getName(), dependency.getVersion()));
+                }
+            }
+        }
     }
 
     public ModuleVersionIdentifier getId() {
         return id;
     }
 
-    public boolean equals(Object other) {
-        if (!(other instanceof ProjectPublication)) {
-            return false;
-        }
-        return id.equals(((ProjectPublication) other).getId());
+    @Override
+    public Set<ModuleVersionIdentifier> getDependencies() {
+        return dependencies;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        DefaultProjectPublication that = (DefaultProjectPublication) o;
+        return Objects.equal(id, that.id) &&
+            Objects.equal(dependencies, that.dependencies);
+    }
+
+    @Override
     public int hashCode() {
-        return id.hashCode();
+        return Objects.hashCode(id, dependencies);
     }
 }

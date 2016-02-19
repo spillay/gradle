@@ -17,20 +17,30 @@
 package org.gradle.tooling.internal.gradle;
 
 import com.google.common.base.Objects;
+import com.google.common.collect.Sets;
 import org.gradle.tooling.model.GradleModuleVersion;
 
 import java.io.Serializable;
+import java.util.Set;
 
 public class DefaultGradlePublication implements Serializable {
     private GradleModuleVersion id;
+    private Set<GradleModuleVersion> dependencies = Sets.newLinkedHashSet();
 
     public GradleModuleVersion getId() {
         return id;
     }
 
-    public DefaultGradlePublication setId(GradleModuleVersion id) {
+    public Set<GradleModuleVersion> getDependencies() {
+        return dependencies;
+    }
+
+    public void setId(GradleModuleVersion id) {
         this.id = id;
-        return this;
+    }
+
+    public void addDependency(GradleModuleVersion id) {
+        dependencies.add(id);
     }
 
     public String toString() {

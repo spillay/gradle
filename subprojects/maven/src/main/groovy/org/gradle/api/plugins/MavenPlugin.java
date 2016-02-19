@@ -145,7 +145,7 @@ public class MavenPlugin implements Plugin<ProjectInternal> {
                             pom.getArtifactId().equals(MavenProject.EMPTY_PROJECT_ARTIFACT_ID) ? module.getName() : pom.getArtifactId(),
                             pom.getVersion().equals(MavenProject.EMPTY_PROJECT_VERSION) ? module.getVersion() : pom.getVersion()
                     );
-                    publicationRegistry.registerPublication(project.getPath(), new DefaultProjectPublication(publicationId));
+                    publicationRegistry.registerPublication(project.getPath(), new DefaultProjectPublication(publicationId, configuration));
                 }
             }
         });

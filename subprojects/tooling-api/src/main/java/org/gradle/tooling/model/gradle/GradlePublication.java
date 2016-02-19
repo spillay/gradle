@@ -19,6 +19,8 @@ package org.gradle.tooling.model.gradle;
 import org.gradle.api.Incubating;
 import org.gradle.tooling.model.GradleModuleVersion;
 
+import java.util.Set;
+
 /**
  * Represents some publication produced by a Gradle project, typically to a Maven or Ivy repository.
  *
@@ -32,4 +34,6 @@ public interface GradlePublication {
      * @return the unique identifier of the publication
      */
     GradleModuleVersion getId();
+
+    Set<GradleModuleVersion> getDependencies();
 }
