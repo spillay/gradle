@@ -22,6 +22,10 @@ import org.gradle.tooling.model.eclipse.EclipseProject
 abstract class AbstractDemoCrossVersionSpec extends CompositeToolingApiSpecification {
     def participantA, participantB
 
+    def setup() {
+        useEmbeddedParticipants = true
+    }
+
     String buildFileContent() {
         """
 apply plugin: 'java'
