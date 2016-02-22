@@ -16,7 +16,6 @@
 
 package org.gradle.tooling.internal.provider.runner;
 
-import com.beust.jcommander.internal.Sets;
 import com.google.common.collect.Maps;
 import org.apache.commons.lang.StringUtils;
 import org.gradle.api.Transformer;
@@ -28,6 +27,7 @@ import org.gradle.internal.invocation.BuildAction;
 import org.gradle.launcher.exec.CompositeBuildActionParameters;
 import org.gradle.launcher.exec.CompositeBuildActionRunner;
 import org.gradle.launcher.exec.CompositeBuildController;
+import org.gradle.logging.ProgressLoggerFactory;
 import org.gradle.tooling.*;
 import org.gradle.tooling.internal.consumer.CancellationTokenInternal;
 import org.gradle.tooling.internal.consumer.DefaultGradleConnector;
@@ -132,7 +132,8 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         final String requestedModelName = ((BuildModelAction) action).getModelName();
         Class<? extends HierarchicalElement> modelType = modelRequestTypeToModelTypeMapping.get(requestedModelName);
         if (modelType != null) {
-            Set<Object> results = aggregateModels(modelType, actionParameters, requestContext.getCancellationToken());
+            ProgressLoggerFactory progressLoggerFactory = buildController.getBuildScopeServices().get(ProgressLoggerFactory.class);
+            Set<Object> results = aggregateModels(modelType, actionParameters, requestContext.getCancellationToken(), progressLoggerFactory);
             SetContainer setContainer = new SetContainer(results);
             PayloadSerializer payloadSerializer = buildController.getBuildScopeServices().get(PayloadSerializer.class);
             buildController.setResult(new BuildActionResult(payloadSerializer.serialize(setContainer), null));
@@ -141,36 +142,35 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         }
     }
 
-    private Set<Object> aggregateModels(Class<? extends HierarchicalElement> modelType, CompositeBuildActionParameters actionParameters, BuildCancellationToken cancellationToken) {
+    private Set<Object> aggregateModels(Class<? extends HierarchicalElement> modelType, CompositeBuildActionParameters actionParameters, BuildCancellationToken cancellationToken, ProgressLoggerFactory progressLoggerFactory) {
         Set<Object> results = new LinkedHashSet<Object>();
         final CompositeParameters compositeParameters = actionParameters.getCompositeParameters();
+
         final List<GradleParticipantBuild> participantBuilds = compositeParameters.getBuilds();
-        File gradleUserHomeDir = compositeParameters.getGradleUserHomeDir();
-        File daemonBaseDir = compositeParameters.getDaemonBaseDir();
-        Integer daemonMaxIdleTimeValue = compositeParameters.getDaemonMaxIdleTimeValue();
-        TimeUnit daemonMaxIdleTimeUnits = compositeParameters.getDaemonMaxIdleTimeUnits();
-        final Set<BuildEnvironment> buildEnvironments = fetchModels(participantBuilds, BuildEnvironment.class, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits, null);
+        final Set<BuildEnvironment> buildEnvironments = fetchModels(participantBuilds, BuildEnvironment.class, cancellationToken, compositeParameters, progressLoggerFactory, null);
         CompositeContext context = null;
         if (supportsCompositeSubstitution(buildEnvironments)) {
-            context = buildContext(participantBuilds, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits);
+            context = buildContext(participantBuilds, cancellationToken, compositeParameters);
         }
-        results.addAll(fetchModels(compositeParameters.getBuilds(), modelType, cancellationToken, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits, context));
+        results.addAll(fetchModels(compositeParameters.getBuilds(), modelType, cancellationToken, compositeParameters, progressLoggerFactory, context));
         return results;
     }
 
-    private <T> Set<T> fetchModels(List<GradleParticipantBuild> participantBuilds, Class<T> modelType, final BuildCancellationToken cancellationToken, File gradleUserHomeDir, File daemonBaseDir, Integer daemonMaxIdleTimeValue, TimeUnit daemonMaxIdleTimeUnits, CompositeContext context) {
+    private <T> Set<T> fetchModels(List<GradleParticipantBuild> participantBuilds, Class<T> modelType, final BuildCancellationToken cancellationToken, CompositeParameters compositeParameters, ProgressLoggerFactory progressLoggerFactory, CompositeContext context) {
         final Set<T> results = new LinkedHashSet<T>();
         final File initScript = generateInitScriptFromContext(context);
         for (GradleParticipantBuild participant : participantBuilds) {
             if (cancellationToken.isCancellationRequested()) {
                 break;
             }
-            ProjectConnection projectConnection = connect(participant, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits);
+            ProjectConnection projectConnection = connect(participant, compositeParameters);
             ModelBuilder<T> modelBuilder = projectConnection.model(modelType);
             if (initScript!=null) {
                 modelBuilder.withArguments("-I", initScript.getAbsolutePath());
             }
+
             modelBuilder.withCancellationToken(new CancellationTokenAdapter(cancellationToken));
+            modelBuilder.addProgressListener(new ProgressListenerToProgressLoggerAdapter(progressLoggerFactory));
             if (cancellationToken.isCancellationRequested()) {
                 projectConnection.close();
                 break;
@@ -190,7 +190,7 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         Map<String, ProjectPublications> projectsToPublication; // : or :x -> publications
     }
 
-    private CompositeContext buildContext(List<GradleParticipantBuild> participantBuilds, final BuildCancellationToken cancellationToken, File gradleUserHomeDir, File daemonBaseDir, Integer daemonMaxIdleTimeValue, TimeUnit daemonMaxIdleTimeUnits) {
+    private CompositeContext buildContext(List<GradleParticipantBuild> participantBuilds, final BuildCancellationToken cancellationToken, CompositeParameters compositeParameters) {
         final CompositeContext context = new CompositeContext();
         for (GradleParticipantBuild participant : participantBuilds) {
             if (cancellationToken.isCancellationRequested()) {
@@ -198,7 +198,7 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
             }
             // TODO: Need to figure out a way to determine participant name
             final String participantName = participant.getProjectDir().getName();
-            ProjectConnection projectConnection = connect(participant, gradleUserHomeDir, daemonBaseDir, daemonMaxIdleTimeValue, daemonMaxIdleTimeUnits);
+            ProjectConnection projectConnection = connect(participant, compositeParameters);
             try {
                 PublicationSetForParticipant result = projectConnection.action(new RetrievePublicationAction()).
                     withCancellationToken(new CancellationTokenAdapter(cancellationToken)).
@@ -220,8 +220,14 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         }
     }
 
-    private ProjectConnection connect(GradleParticipantBuild build, File gradleUserHomeDir, File daemonBaseDir, Integer daemonMaxIdleTimeValue, TimeUnit daemonMaxIdleTimeUnits) {
+    private ProjectConnection connect(GradleParticipantBuild build, CompositeParameters compositeParameters) {
         DefaultGradleConnector connector = getInternalConnector();
+        File gradleUserHomeDir = compositeParameters.getGradleUserHomeDir();
+        File daemonBaseDir = compositeParameters.getDaemonBaseDir();
+        Integer daemonMaxIdleTimeValue = compositeParameters.getDaemonMaxIdleTimeValue();
+        TimeUnit daemonMaxIdleTimeUnits = compositeParameters.getDaemonMaxIdleTimeUnits();
+        Boolean embeddedParticipants = compositeParameters.isEmbeddedParticipants();
+
         if (gradleUserHomeDir != null) {
             connector.useGradleUserHomeDir(gradleUserHomeDir);
         }
@@ -233,7 +239,14 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         }
         connector.searchUpwards(false);
         connector.forProjectDirectory(build.getProjectDir());
-        return configureDistribution(connector, build).connect();
+
+        if (embeddedParticipants) {
+            connector.embedded(true);
+            connector.useClasspathDistribution();
+            return connector.connect();
+        } else {
+            return configureDistribution(connector, build).connect();
+        }
     }
 
     private DefaultGradleConnector getInternalConnector() {
@@ -265,24 +278,13 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
             this.token = token;
         }
 
-        @Override
         public boolean isCancellationRequested() {
             return token.isCancellationRequested();
         }
 
-        @Override
         public BuildCancellationToken getToken() {
             return token;
         }
-    }
-
-    private static class Registration {
-        String moduleId;
-        String projectPath;
-        Set<String> dependencies = Sets.newHashSet();
-        Set<String> artifacts = Sets.newHashSet();
-
-
     }
 
     private final static class RetrievePublicationAction implements org.gradle.tooling.BuildAction<PublicationSetForParticipant> {
