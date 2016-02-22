@@ -1,15 +1,3 @@
-buildscript {
-    repositories {
-        maven {
-            url("file://" + file("../repo"))
-        }
-    }
-    dependencies {
-        classpath 'org:buildSrc:1.0'
-    }
-}
-
-apply plugin: org.buildSrc.Example
 apply plugin: 'java'
 apply plugin: 'maven'
 apply plugin: 'eclipse'
@@ -18,9 +6,7 @@ group = 'org'
 version = '1.0'
 
 dependencies {
-    compile 'log4j:log4j:1.2.17'
-    compile 'org:y:1.0'
-    compile 'org:z:1.0'
+    compile gradleApi()
 }
 
 repositories {
