@@ -16,7 +16,6 @@
 
 package org.gradle.tooling.internal.provider.runner;
 
-import com.google.common.collect.Maps;
 import org.gradle.StartParameter;
 import org.gradle.api.Transformer;
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeBuildContext;
@@ -67,39 +66,6 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         this.put(SetOfEclipseProjects.class.getName(), EclipseProject.class);
     }};
 
-    private static final class ParticipantPublications {
-        private final Map<String, PublicationSetForParticipant> publicationsPerParticipant = Maps.newHashMap();
-    }
-
-    private void constructCompositeContext(CompositeBuildContext publications, ParticipantPublications context) {
-        if (context!=null) {
-            for (Map.Entry<String, PublicationSetForParticipant> e : context.publicationsPerParticipant.entrySet()) {
-                String participantName = e.getKey();
-                PublicationSetForParticipant publicationSetForParticipant = e.getValue();
-                for (Map.Entry<String, ProjectPublications> publicationForProject : publicationSetForParticipant.projectsToPublication.entrySet()) {
-                    String projectPath = publicationForProject.getKey();
-                    ProjectPublications pubs = publicationForProject.getValue();
-
-                    for (GradlePublication publication : pubs.getPublications().getAll()) {
-                        String compositePath = participantName + ":" + projectPath;
-                        Set<String> deps = CollectionUtils.collect(publication.getDependencies(), new Transformer<String, GradleModuleVersion>() {
-                            public String transform(GradleModuleVersion id) {
-                                return id.getGroup() + ":" + id.getName() + ":" + id.getVersion();
-                            }
-                        });
-                        Set<String> artifacts = CollectionUtils.collect(publication.getArtifacts(), new Transformer<String, File>() {
-                            @Override
-                            public String transform(File file) {
-                                return file.getAbsolutePath();
-                            }
-                        });
-                        publications.register(moduleId(publication.getId()), compositePath, deps, artifacts);
-                    }
-                }
-            }
-        }
-    }
-
     private String moduleId(GradleModuleVersion id) {
         return id.getGroup() + ":" + id.getName();
     }
@@ -148,20 +114,55 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         final Set<BuildEnvironment> buildEnvironments = fetchModelsViaToolingAPI(BuildEnvironment.class, participantBuilds, compositeParameters, cancellationToken, progressLoggerFactory);
         Class<? extends HierarchicalElement> modelType = getModelType(modelAction);
         if (supportsCompositeSubstitution(buildEnvironments)) {
-            ParticipantPublications context = constructCompositeContext(cancellationToken, buildScopeServices, compositeParameters, participantBuilds);
-            results.addAll(fetchModelsInProcess(modelAction, modelType, compositeParameters.getBuilds(), cancellationToken, context, buildScopeServices));
+            constructCompositeContext(cancellationToken, buildScopeServices, compositeParameters, participantBuilds);
+            results.addAll(fetchModelsInProcess(modelAction, modelType, compositeParameters.getBuilds(), cancellationToken, buildScopeServices));
         } else {
             results.addAll(fetchModelsViaToolingAPI(modelType, compositeParameters.getBuilds(), compositeParameters, cancellationToken, progressLoggerFactory));
         }
         return results;
     }
 
-    // TODO:DAZ Detangle this
-    private ParticipantPublications constructCompositeContext(BuildCancellationToken cancellationToken, ServiceRegistry buildScopeServices, CompositeParameters compositeParameters, List<GradleParticipantBuild> participantBuilds) {
+    private void constructCompositeContext(BuildCancellationToken cancellationToken, ServiceRegistry buildScopeServices, CompositeParameters compositeParameters, List<GradleParticipantBuild> participantBuilds) {
         CompositeBuildContext publications = buildScopeServices.get(CompositeBuildContext.class);
-        ParticipantPublications context = buildContext(participantBuilds, cancellationToken, compositeParameters);
-        constructCompositeContext(publications, context);
-        return context;
+        for (GradleParticipantBuild participant : participantBuilds) {
+            if (cancellationToken.isCancellationRequested()) {
+                break;
+            }
+            // TODO: Need to figure out a way to determine participant name
+            final String participantName = participant.getProjectDir().getName();
+            ProjectConnection projectConnection = connect(participant, compositeParameters);
+            try {
+                PublicationSetForParticipant result = projectConnection.action(new RetrievePublicationAction()).
+                    withCancellationToken(new CancellationTokenAdapter(cancellationToken)).
+                    run();
+                registerPublicationsForParticipant(publications, participantName, result);
+            } finally {
+                projectConnection.close();
+            }
+        }
+    }
+
+    private void registerPublicationsForParticipant(CompositeBuildContext publications, String participantName, PublicationSetForParticipant publicationSetForParticipant) {
+        for (Map.Entry<String, ProjectPublications> publicationForProject : publicationSetForParticipant.projectsToPublication.entrySet()) {
+            String projectPath = publicationForProject.getKey();
+            ProjectPublications pubs = publicationForProject.getValue();
+
+            for (GradlePublication publication : pubs.getPublications().getAll()) {
+                String compositePath = participantName + ":" + projectPath;
+                Set<String> deps = CollectionUtils.collect(publication.getDependencies(), new Transformer<String, GradleModuleVersion>() {
+                    public String transform(GradleModuleVersion id) {
+                        return id.getGroup() + ":" + id.getName() + ":" + id.getVersion();
+                    }
+                });
+                Set<String> artifacts = CollectionUtils.collect(publication.getArtifacts(), new Transformer<String, File>() {
+                    @Override
+                    public String transform(File file) {
+                        return file.getAbsolutePath();
+                    }
+                });
+                publications.register(moduleId(publication.getId()), compositePath, deps, artifacts);
+            }
+        }
     }
 
     private <T> Set<T> fetchModelsViaToolingAPI(Class<T> modelType, List<GradleParticipantBuild> participantBuilds, CompositeParameters compositeParameters, BuildCancellationToken cancellationToken, ProgressLoggerFactory progressLoggerFactory) {
@@ -189,7 +190,7 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         return results;
     }
 
-    private <T extends HierarchicalElement> Set<T> fetchModelsInProcess(BuildModelAction modelAction, Class<T> modelType, List<GradleParticipantBuild> participantBuilds, final BuildCancellationToken cancellationToken, ParticipantPublications context, ServiceRegistry buildSessionScopedServices) {
+    private <T extends HierarchicalElement> Set<T> fetchModelsInProcess(BuildModelAction modelAction, Class<T> modelType, List<GradleParticipantBuild> participantBuilds, final BuildCancellationToken cancellationToken, ServiceRegistry buildSessionScopedServices) {
         final Set<T> results = new LinkedHashSet<T>();
 
         GradleLauncherFactory gradleLauncherFactory = buildSessionScopedServices.get(GradleLauncherFactory.class);
@@ -227,27 +228,6 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
 
     private static final class PublicationSetForParticipant implements Serializable {
         Map<String, ProjectPublications> projectsToPublication; // : or :x -> publications
-    }
-
-    private ParticipantPublications buildContext(List<GradleParticipantBuild> participantBuilds, final BuildCancellationToken cancellationToken, CompositeParameters compositeParameters) {
-        final ParticipantPublications context = new ParticipantPublications();
-        for (GradleParticipantBuild participant : participantBuilds) {
-            if (cancellationToken.isCancellationRequested()) {
-                break;
-            }
-            // TODO: Need to figure out a way to determine participant name
-            final String participantName = participant.getProjectDir().getName();
-            ProjectConnection projectConnection = connect(participant, compositeParameters);
-            try {
-                PublicationSetForParticipant result = projectConnection.action(new RetrievePublicationAction()).
-                    withCancellationToken(new CancellationTokenAdapter(cancellationToken)).
-                    run();
-                context.publicationsPerParticipant.put(participantName, result);
-            } finally {
-                projectConnection.close();
-            }
-        }
-        return context;
     }
 
     private <T> void accumulate(Set<T> allResults, T element) {
