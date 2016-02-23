@@ -16,8 +16,21 @@
 
 package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 
-import java.util.List;
+import org.gradle.api.artifacts.ModuleIdentifier;
+import org.gradle.api.artifacts.ModuleVersionIdentifier;
+import org.gradle.api.artifacts.PublishArtifact;
+
+import java.util.Set;
 
 public interface CompositeBuildContext {
-    void register(String module, String projectPath, List<String> dependencies, List<String> artifactFiles);
+    Set<Publication> getPublications();
+
+    void register(String module, String projectPath, Set<String> dependencies, Set<String> artifacts);
+
+    interface Publication {
+        ModuleIdentifier getModuleId();
+        String getProjectPath();
+        Set<ModuleVersionIdentifier> getDependencies();
+        Set<PublishArtifact> getArtifacts();
+    }
 }

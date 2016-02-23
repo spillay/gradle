@@ -250,8 +250,8 @@ class DependencyManagementBuildScopeServices {
         }
     }
 
-    CompositeProjectDependencyResolver createCompositeDependencyResolver() {
-        return new CompositeProjectDependencyResolver();
+    CompositeProjectDependencyResolver createCompositeDependencyResolver(ServiceRegistry serviceRegistry) {
+        return new CompositeProjectDependencyResolver(serviceRegistry);
     }
 
     ResolverProviderFactory createCompositeResolverProviderFactory(final CompositeProjectDependencyResolver resolver) {
