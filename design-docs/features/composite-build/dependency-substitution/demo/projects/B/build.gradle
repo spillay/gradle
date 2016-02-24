@@ -25,3 +25,8 @@ subprojects {
         }
     }
 }
+project(':z') {
+    dependencies {
+        compile 'org:c:1.0'
+    }
+}

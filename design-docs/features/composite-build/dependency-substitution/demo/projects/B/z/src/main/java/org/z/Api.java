@@ -1,3 +1,4 @@
 package org.z;
 
-public interface Api {}
+public interface Api {
+}
