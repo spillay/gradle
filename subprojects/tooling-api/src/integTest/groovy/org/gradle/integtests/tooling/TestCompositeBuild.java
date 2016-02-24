@@ -52,10 +52,11 @@ public class TestCompositeBuild {
         startParameter.setSearchUpwards(false);
 
         DefaultServiceRegistry compositeServices = (DefaultServiceRegistry) ServiceRegistryBuilder.builder()
+            .displayName("Composite services")
             .parent(globalServices)
             .build();
         compositeServices.add(CompositeBuildContext.class, buildCompositeContext(globalServices));
-        compositeServices.addProvider(new CompositeScopeServices(startParameter));
+        compositeServices.addProvider(new CompositeScopeServices(startParameter, compositeServices));
 
         ServiceRegistry buildSessionServices = new BuildSessionScopeServices(compositeServices, startParameter, ClassPath.EMPTY);
         DefaultBuildRequestContext requestContext = new DefaultBuildRequestContext(new DefaultBuildRequestMetaData(clientMetaData(), getBuildStartTime()), new DefaultBuildCancellationToken(), new NoOpBuildEventConsumer());
@@ -71,6 +72,7 @@ public class TestCompositeBuild {
         CompositeContextBuilder builder = new CompositeContextBuilder(globalServices.get(GradleLauncherFactory.class));
         builder.addParticipant("A", new File("/Users/daz/dev/gradle/gradle/design-docs/features/composite-build/dependency-substitution/demo/projects/A"));
         builder.addParticipant("B", new File("/Users/daz/dev/gradle/gradle/design-docs/features/composite-build/dependency-substitution/demo/projects/B"));
+        builder.addParticipant("C", new File("/Users/daz/dev/gradle/gradle/design-docs/features/composite-build/dependency-substitution/demo/projects/C"));
         return builder.build();
     }
 

@@ -41,13 +41,14 @@ import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.TaskContainer;
 import org.gradle.api.tasks.TaskDependency;
-import org.gradle.initialization.DefaultGradleLauncher;
-import org.gradle.initialization.GradleLauncher;
-import org.gradle.initialization.GradleLauncherFactory;
+import org.gradle.initialization.*;
+import org.gradle.internal.classpath.ClassPath;
 import org.gradle.internal.component.local.model.DefaultCompositeProjectComponentIdentifier;
 import org.gradle.internal.component.local.model.DefaultLocalComponentMetaData;
 import org.gradle.internal.component.local.model.LocalComponentMetaData;
 import org.gradle.internal.component.model.DependencyMetaData;
+import org.gradle.internal.service.ServiceRegistry;
+import org.gradle.internal.service.scopes.BuildSessionScopeServices;
 import org.gradle.util.CollectionUtils;
 
 import java.io.File;
@@ -60,12 +61,14 @@ public class DefaultCompositeProjectComponentRegistry implements CompositeProjec
     private final GradleLauncherFactory gradleLauncherFactory;
     private final StartParameter startParameter;
     private final Map<String, LocalComponentMetaData> cachedMetadata = Maps.newHashMap();
-    private final Map<String, GradleLauncher> cachedLaunchers = Maps.newHashMap();
+    private final ServiceRegistry serviceRegistry;
+//    private final Map<String, GradleLauncher> cachedLaunchers = Maps.newHashMap();
 
-    public DefaultCompositeProjectComponentRegistry(CompositeBuildContext context, GradleLauncherFactory gradleLauncherFactory, StartParameter startParameter) {
+    public DefaultCompositeProjectComponentRegistry(CompositeBuildContext context, GradleLauncherFactory gradleLauncherFactory, StartParameter startParameter, ServiceRegistry serviceRegistry) {
         this.context = context;
         this.gradleLauncherFactory = gradleLauncherFactory;
         this.startParameter = startParameter;
+        this.serviceRegistry = serviceRegistry;
     }
 
     @Override
@@ -98,16 +101,24 @@ public class DefaultCompositeProjectComponentRegistry implements CompositeProjec
         param.setProjectDir(projectDirectory);
         GradleLauncher launcher = gradleLauncherFactory.newInstance(param);
 
-        BuildResult buildAnalysis = launcher.getBuildAnalysis();
-        GradleInternal gradle = (GradleInternal) buildAnalysis.getGradle();
-        ProjectInternal defaultProject = gradle.getDefaultProject();
+        final ModuleVersionIdentifier id;
+        final Set<ModuleVersionIdentifier> dependencies;
+        final Set<File> artifacts;
+        final Set<String> taskNames;
+        try {
+            BuildResult buildAnalysis = launcher.getBuildAnalysis();
+            GradleInternal gradle = (GradleInternal) buildAnalysis.getGradle();
+            ProjectInternal defaultProject = gradle.getDefaultProject();
+            id = determineIdentifier(defaultProject);
+            dependencies = determineDependencies(defaultProject, Dependency.DEFAULT_CONFIGURATION);
+            artifacts = determineArtifacts(defaultProject, Dependency.ARCHIVES_CONFIGURATION);
+            taskNames = determineTaskNames(defaultProject, Dependency.ARCHIVES_CONFIGURATION);
+        } finally {
+            launcher.stop();
+        }
 
-        cachedLaunchers.put(projectPath, launcher);
+//        cachedLaunchers.put(projectPath, launcher);
 
-        final ModuleVersionIdentifier id = determineIdentifier(defaultProject);
-        final Set<ModuleVersionIdentifier> dependencies = determineDependencies(defaultProject, Dependency.DEFAULT_CONFIGURATION);
-        final Set<File> artifacts = determineArtifacts(defaultProject, Dependency.ARCHIVES_CONFIGURATION);
-        final Set<String> taskNames = determineTaskNames(defaultProject, Dependency.ARCHIVES_CONFIGURATION);
 
         ComponentIdentifier componentIdentifier = new DefaultCompositeProjectComponentIdentifier(projectPath);
         DefaultLocalComponentMetaData metadata = new DefaultLocalComponentMetaData(id, componentIdentifier, "integration");
@@ -188,12 +199,20 @@ public class DefaultCompositeProjectComponentRegistry implements CompositeProjec
     }
 
     public void build(String projectPath, Set<String> taskNames) {
-        DefaultGradleLauncher cachedLauncher = (DefaultGradleLauncher) cachedLaunchers.get(projectPath);
-        cachedLauncher.getGradle().getStartParameter().setTaskNames(taskNames);
+        File projectDirectory = context.getProjectDirectory(projectPath);
+        StartParameter param = startParameter.newBuild();
+        param.setProjectDir(projectDirectory);
+        param.setTaskNames(taskNames);
+
+        ServiceRegistry buildSessionServices = new BuildSessionScopeServices(serviceRegistry, startParameter, ClassPath.EMPTY);
+
+        DefaultBuildRequestContext requestContext = new DefaultBuildRequestContext(new DefaultBuildRequestMetaData(System.currentTimeMillis()), new DefaultBuildCancellationToken(), new NoOpBuildEventConsumer());
+        GradleLauncher launcher = gradleLauncherFactory.newInstance(param, requestContext, buildSessionServices);
+
         try {
-            cachedLauncher.runPreconfigured();
+            launcher.run();
         } finally {
-            cachedLauncher.stop();
+            launcher.stop();
         }
     }
 
