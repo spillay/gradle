@@ -16,6 +16,7 @@
 
 package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import org.apache.commons.lang.StringUtils;
 import org.gradle.BuildResult;
@@ -38,6 +39,7 @@ import org.gradle.api.specs.Spec;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.TaskContainer;
 import org.gradle.api.tasks.TaskDependency;
+import org.gradle.initialization.DefaultGradleLauncher;
 import org.gradle.initialization.GradleLauncher;
 import org.gradle.initialization.GradleLauncherFactory;
 import org.gradle.internal.component.local.model.DefaultCompositeProjectComponentIdentifier;
@@ -49,12 +51,15 @@ import org.gradle.util.CollectionUtils;
 
 import java.io.File;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 
 public class DefaultCompositeProjectComponentRegistry implements CompositeProjectComponentRegistry {
     private final CompositeBuildContext context;
     private final GradleLauncherFactory gradleLauncherFactory;
     private final StartParameter startParameter;
+    private final Map<String, ProjectMetaData> cachedMetadata = Maps.newHashMap();
+    private final Map<String, GradleLauncher> cachedLaunchers = Maps.newHashMap();
 
     public DefaultCompositeProjectComponentRegistry(ServiceRegistry registry) {
         this.context = CollectionUtils.findSingle(registry.getAll(CompositeBuildContext.class));
@@ -127,23 +132,32 @@ public class DefaultCompositeProjectComponentRegistry implements CompositeProjec
     }
 
     public ProjectMetaData getMetaData(final String projectPath) {
-        final Set<ModuleVersionIdentifier> dependencies;
-        final Set<File> artifacts;
-        final Set<String> taskNames;
-        GradleLauncher launcher = getGradleLauncher(projectPath, Collections.<String>emptySet());
-        try {
-            BuildResult buildAnalysis = launcher.getBuildAnalysis();
-            GradleInternal gradle = (GradleInternal) buildAnalysis.getGradle();
-            ProjectInternal defaultProject = gradle.getDefaultProject();
-            artifacts = determineArtifacts(defaultProject, Dependency.ARCHIVES_CONFIGURATION);
-            dependencies = determineDependencies(defaultProject, Dependency.DEFAULT_CONFIGURATION);
-            taskNames = determineTaskNames(defaultProject, Dependency.ARCHIVES_CONFIGURATION);
-        } finally {
-            launcher.stop();
+        if (cachedMetadata.containsKey(projectPath)) {
+            return cachedMetadata.get(projectPath);
         }
+        // TODO:DAZ Should be cached for a build invocation
+        final CompositeBuildContext.Publication publication1 = getPublication(projectPath);
+
+        StartParameter param = startParameter.newBuild();
+        param.setProjectDir(publication1.getProjectDirectory());
+        GradleLauncher launcher = gradleLauncherFactory.newInstance(param);
+
+        // TODO:DAZ Keep the launcher in this state for later running tasks, or make it possible to use a previous `Gradle` instance in the launcher.
+        BuildResult buildAnalysis = launcher.getBuildAnalysis();
+        GradleInternal gradle = (GradleInternal) buildAnalysis.getGradle();
+        ProjectInternal defaultProject = gradle.getDefaultProject();
+
+        final Set<ModuleVersionIdentifier> dependencies = determineDependencies(defaultProject, Dependency.DEFAULT_CONFIGURATION);
+        final Set<File> artifacts = determineArtifacts(defaultProject, Dependency.ARCHIVES_CONFIGURATION);
+        final Set<String> taskNames = determineTaskNames(defaultProject, Dependency.ARCHIVES_CONFIGURATION);
 
         final CompositeBuildContext.Publication publication = getPublication(projectPath);
-        return new ProjectMetaData(publication, dependencies, artifacts, taskNames);
+        ProjectMetaData projectMetaData = new ProjectMetaData(publication, dependencies, artifacts, taskNames);
+
+        cachedMetadata.put(projectPath, projectMetaData);
+        cachedLaunchers.put(projectPath, launcher);
+
+        return projectMetaData;
     }
 
     private Set<ModuleVersionIdentifier> determineDependencies(ProjectInternal defaultProject, String configurationName) {
@@ -177,22 +191,13 @@ public class DefaultCompositeProjectComponentRegistry implements CompositeProjec
     }
 
     public void build(String projectPath, Set<String> taskNames) {
-        GradleLauncher launcher = getGradleLauncher(projectPath, taskNames);
+        DefaultGradleLauncher cachedLauncher = (DefaultGradleLauncher) cachedLaunchers.get(projectPath);
+        cachedLauncher.getGradle().getStartParameter().setTaskNames(taskNames);
         try {
-            launcher.run();
+            cachedLauncher.runPreconfigured();
         } finally {
-            launcher.stop();
+            cachedLauncher.stop();
         }
-    }
-
-    private GradleLauncher getGradleLauncher(String projectPath, Set<String> taskNames) {
-        final CompositeBuildContext.Publication publication = getPublication(projectPath);
-
-        StartParameter param = startParameter.newBuild();
-        param.setProjectDir(publication.getProjectDirectory());
-        param.setTaskNames(taskNames);
-
-        return gradleLauncherFactory.newInstance(param);
     }
 
     private CompositeBuildContext.Publication getPublication(final String projectPath) {

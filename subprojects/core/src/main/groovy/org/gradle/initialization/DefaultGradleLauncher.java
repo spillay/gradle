@@ -32,7 +32,7 @@ import org.gradle.logging.LoggingManagerInternal;
 public class DefaultGradleLauncher extends GradleLauncher {
 
     private enum Stage {
-        Configure, Build
+        Configure, Build, BuildOnly
     }
 
     private final GradleInternal gradle;
@@ -87,6 +87,10 @@ public class DefaultGradleLauncher extends GradleLauncher {
         return doBuild(Stage.Configure);
     }
 
+    public BuildResult runPreconfigured() {
+        return doBuild(Stage.BuildOnly);
+    }
+
     private BuildResult doBuild(final Stage upTo) {
         loggingManager.start();
 
@@ -112,25 +116,27 @@ public class DefaultGradleLauncher extends GradleLauncher {
     }
 
     private void doBuildStages(Stage upTo) {
-        // Evaluate init scripts
-        initScriptHandler.executeScripts(gradle);
+        if (upTo != Stage.BuildOnly) {
+            // Evaluate init scripts
+            initScriptHandler.executeScripts(gradle);
 
-        // Calculate projects
-        settingsLoader.findAndLoadSettings(gradle);
+            // Calculate projects
+            settingsLoader.findAndLoadSettings(gradle);
 
-        // Configure build
-        buildOperationExecutor.run("Configure build", new Runnable() {
-            @Override
-            public void run() {
-                buildConfigurer.configure(gradle);
+            // Configure build
+            buildOperationExecutor.run("Configure build", new Runnable() {
+                @Override
+                public void run() {
+                    buildConfigurer.configure(gradle);
 
-                if (!gradle.getStartParameter().isConfigureOnDemand()) {
-                    buildListener.projectsEvaluated(gradle);
+                    if (!gradle.getStartParameter().isConfigureOnDemand()) {
+                        buildListener.projectsEvaluated(gradle);
+                    }
+
+                    modelConfigurationListener.onConfigure(gradle);
                 }
-
-                modelConfigurationListener.onConfigure(gradle);
-            }
-        });
+            });
+        }
 
         if (upTo == Stage.Configure) {
             return;
@@ -155,7 +161,7 @@ public class DefaultGradleLauncher extends GradleLauncher {
             }
         });
 
-        assert upTo == Stage.Build;
+        assert upTo == Stage.Build || upTo == Stage.BuildOnly;
     }
 
     /**
