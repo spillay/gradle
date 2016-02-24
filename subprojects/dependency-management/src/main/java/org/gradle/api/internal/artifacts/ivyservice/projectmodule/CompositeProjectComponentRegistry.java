@@ -16,25 +16,11 @@
 
 package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 
-import org.gradle.api.artifacts.ModuleIdentifier;
-import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentSelector;
+import org.gradle.internal.component.local.model.LocalComponentMetaData;
 
-import java.io.File;
-import java.util.Set;
-
-public interface CompositeBuildController {
+public interface CompositeProjectComponentRegistry {
     String getReplacementProject(ModuleComponentSelector selector);
 
-    ProjectMetaData getMetaData(String projectPath);
-
-    void build(String projectPath, Set<String> taskNames);
-
-    interface ProjectMetaData {
-        ModuleIdentifier getModuleId();
-        Set<ModuleVersionIdentifier> getDependencies();
-        Set<File> getArtifacts();
-        Set<String> getTaskNames();
-    }
-
+    LocalComponentMetaData getComponentMetadata(String projectPath);
 }
