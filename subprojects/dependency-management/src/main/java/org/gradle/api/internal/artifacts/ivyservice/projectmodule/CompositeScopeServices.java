@@ -16,19 +16,17 @@
 
 package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 
-import org.gradle.api.artifacts.ModuleIdentifier;
-import org.gradle.api.artifacts.component.ModuleComponentSelector;
+import org.gradle.StartParameter;
+import org.gradle.initialization.GradleLauncherFactory;
 
-import java.io.File;
+public class CompositeScopeServices {
+    private final StartParameter startParameter;
 
-public interface CompositeBuildContext {
-    String getReplacementProjectPath(ModuleComponentSelector moduleComponentSelector);
-    File getProjectDirectory(String projectPath);
+    public CompositeScopeServices(StartParameter startParameter) {
+        this.startParameter = startParameter;
+    }
 
-    void register(ModuleIdentifier moduleId, String projectPath, File projectDirectory);
-
-    interface Publication {
-        String getProjectPath();
-        File getProjectDirectory();
+    public CompositeProjectComponentRegistry createCompositeComponentRegistry(CompositeBuildContext context, GradleLauncherFactory gradleLauncherFactory) {
+        return new DefaultCompositeProjectComponentRegistry(context, gradleLauncherFactory, startParameter);
     }
 }

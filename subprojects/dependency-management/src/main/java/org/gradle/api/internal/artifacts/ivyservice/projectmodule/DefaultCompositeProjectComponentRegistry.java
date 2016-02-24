@@ -71,6 +71,9 @@ public class DefaultCompositeProjectComponentRegistry implements CompositeProjec
 
     @Override
     public String getReplacementProject(ModuleComponentSelector selector) {
+        if (context == null) {
+            return null;
+        }
         return context.getReplacementProjectPath(selector);
     }
 

@@ -19,7 +19,7 @@ package org.gradle.integtests.tooling;
 import com.google.common.collect.Lists;
 import org.gradle.StartParameter;
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeBuildContext;
-import org.gradle.api.internal.artifacts.ivyservice.projectmodule.DefaultCompositeBuildContext;
+import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeContextBuilder;
 import org.gradle.configuration.GradleLauncherMetaData;
 import org.gradle.initialization.*;
 import org.gradle.internal.SystemProperties;
@@ -49,7 +49,6 @@ public class TestCompositeBuild {
                 .parent(NativeServices.getInstance())
                 .provider(new GlobalScopeServices(false))
                 .build();
-        globalServices.add(CompositeBuildContext.class, configureComposite());
         BuildActionExecuter<BuildActionParameters> executer = globalServices.get(BuildExecuter.class);
 
         StartParameter startParameter = new StartParameter();
@@ -59,34 +58,37 @@ public class TestCompositeBuild {
         DaemonParameters daemonParameters = new DaemonParameters(new BuildLayoutParameters());
         daemonParameters.setEnabled(false);
 
+        DefaultServiceRegistry compositeServices = (DefaultServiceRegistry) ServiceRegistryBuilder.builder()
+            .parent(globalServices)
+            .build();
+        compositeServices.add(CompositeBuildContext.class, buildCompositeContext(globalServices));
+
         try {
-            runBuild(startParameter, daemonParameters, executer, globalServices);
+            runBuild(startParameter, daemonParameters, executer, compositeServices);
         } finally {
             globalServices.close();
         }
     }
 
-    private static DefaultCompositeBuildContext configureComposite() {
-        DefaultCompositeBuildContext defaultCompositeBuildContext = new DefaultCompositeBuildContext();
-        String projectDir = "/Users/daz/dev/gradle/gradle/design-docs/features/composite-build/dependency-substitution/demo/projects/B/y";
-        defaultCompositeBuildContext.register("org:y", "B::y", projectDir);
-        String projectDirz = "/Users/daz/dev/gradle/gradle/design-docs/features/composite-build/dependency-substitution/demo/projects/B/z";
-        defaultCompositeBuildContext.register("org:z", "B::z", projectDirz);
-        return defaultCompositeBuildContext;
-    }
-
     private static Object runBuild(StartParameter startParameter, DaemonParameters daemonParameters, BuildActionExecuter<BuildActionParameters> executer, ServiceRegistry sharedServices) {
         BuildActionParameters parameters = new DefaultBuildActionParameters(
-                daemonParameters.getEffectiveSystemProperties(),
-                System.getenv(),
-                SystemProperties.getInstance().getCurrentDir(),
-                startParameter.getLogLevel(),
-                daemonParameters.getDaemonUsage(), startParameter.isContinuous(), daemonParameters.isInteractive(), ClassPath.EMPTY);
+            daemonParameters.getEffectiveSystemProperties(),
+            System.getenv(),
+            SystemProperties.getInstance().getCurrentDir(),
+            startParameter.getLogLevel(),
+            daemonParameters.getDaemonUsage(), startParameter.isContinuous(), daemonParameters.isInteractive(), ClassPath.EMPTY);
         return executer.execute(
-                new ExecuteBuildAction(startParameter),
-                new DefaultBuildRequestContext(new DefaultBuildRequestMetaData(clientMetaData(), getBuildStartTime()), new DefaultBuildCancellationToken(), new NoOpBuildEventConsumer()),
-                parameters,
-                sharedServices);
+            new ExecuteBuildAction(startParameter),
+            new DefaultBuildRequestContext(new DefaultBuildRequestMetaData(clientMetaData(), getBuildStartTime()), new DefaultBuildCancellationToken(), new NoOpBuildEventConsumer()),
+            parameters,
+            sharedServices);
+    }
+
+    private static CompositeBuildContext buildCompositeContext(DefaultServiceRegistry globalServices) {
+        CompositeContextBuilder builder = new CompositeContextBuilder(globalServices.get(GradleLauncherFactory.class));
+        builder.addParticipant("A", new File("/Users/daz/dev/gradle/gradle/design-docs/features/composite-build/dependency-substitution/demo/projects/A"));
+        builder.addParticipant("B", new File("/Users/daz/dev/gradle/gradle/design-docs/features/composite-build/dependency-substitution/demo/projects/B"));
+        return builder.build();
     }
 
     private static long getBuildStartTime() {

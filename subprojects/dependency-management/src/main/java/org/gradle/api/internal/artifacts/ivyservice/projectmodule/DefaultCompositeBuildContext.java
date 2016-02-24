@@ -19,7 +19,6 @@ package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 import com.google.common.collect.Sets;
 import org.gradle.api.artifacts.ModuleIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentSelector;
-import org.gradle.api.internal.artifacts.DefaultModuleIdentifier;
 
 import java.io.File;
 import java.util.Set;
@@ -49,8 +48,9 @@ public class DefaultCompositeBuildContext implements CompositeBuildContext {
     }
 
     @Override
-    public void register(String module, String projectPath, String projectDir) {
-        publications.add(new RegisteredProjectPublication(module, projectPath, projectDir));
+    public void register(ModuleIdentifier moduleId, String projectPath, File projectDir) {
+        System.out.println(String.format("Registering project participant: %s | %s | %s", moduleId, projectPath, projectDir));
+        publications.add(new RegisteredProjectPublication(moduleId, projectPath, projectDir));
     }
 
     public static class RegisteredProjectPublication {
@@ -58,11 +58,10 @@ public class DefaultCompositeBuildContext implements CompositeBuildContext {
         String projectPath;
         File projectDirectory;
 
-        public RegisteredProjectPublication(String module, String projectPath, String projectDir) {
-            String[] ga = module.split(":");
-            this.moduleId = DefaultModuleIdentifier.newId(ga[0], ga[1]);
+        public RegisteredProjectPublication(ModuleIdentifier moduleId, String projectPath, File projectDir) {
+            this.moduleId = moduleId;
             this.projectPath = projectPath;
-            this.projectDirectory = new File(projectDir);
+            this.projectDirectory = projectDir;
         }
 
         public ModuleIdentifier getModuleId() {
