@@ -18,19 +18,22 @@ package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 
 import org.gradle.api.artifacts.ModuleIdentifier;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
-import org.gradle.api.artifacts.PublishArtifact;
 
+import java.io.File;
 import java.util.Set;
 
 public interface CompositeBuildContext {
     Set<Publication> getPublications();
 
-    void register(String module, String projectPath, Set<String> dependencies, Set<String> artifacts);
+    void register(String module, String projectPath, Set<String> dependencies, Set<String> artifacts, String projectDirectory, String taskName);
 
     interface Publication {
         ModuleIdentifier getModuleId();
         String getProjectPath();
         Set<ModuleVersionIdentifier> getDependencies();
-        Set<PublishArtifact> getArtifacts();
+        Set<File> getArtifacts();
+
+        File getProjectDirectory();
+        String getTaskName();
     }
 }

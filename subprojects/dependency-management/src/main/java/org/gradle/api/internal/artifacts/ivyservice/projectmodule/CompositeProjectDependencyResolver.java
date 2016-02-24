@@ -17,7 +17,12 @@ package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import org.apache.commons.lang.StringUtils;
+import org.gradle.api.Action;
+import org.gradle.api.Task;
+import org.gradle.api.Transformer;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
+import org.gradle.api.artifacts.PublishArtifact;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.component.CompositeProjectComponentIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentSelector;
@@ -26,8 +31,11 @@ import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDepen
 import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies.DefaultExcludeRuleConverter;
 import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies.ExternalModuleIvyDependencyDescriptorFactory;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.VersionSelectionReasons;
+import org.gradle.api.internal.artifacts.publish.DefaultPublishArtifact;
 import org.gradle.api.internal.component.ArtifactType;
-import org.gradle.api.internal.tasks.DefaultTaskDependency;
+import org.gradle.api.tasks.GradleBuild;
+import org.gradle.api.tasks.TaskContainer;
+import org.gradle.api.tasks.TaskDependency;
 import org.gradle.internal.component.local.model.DefaultCompositeProjectComponentIdentifier;
 import org.gradle.internal.component.local.model.DefaultLocalComponentMetaData;
 import org.gradle.internal.component.local.model.LocalComponentArtifactIdentifier;
@@ -41,6 +49,7 @@ import org.gradle.internal.resolve.result.BuildableArtifactSetResolveResult;
 import org.gradle.internal.resolve.result.BuildableComponentIdResolveResult;
 import org.gradle.internal.resolve.result.BuildableComponentResolveResult;
 import org.gradle.internal.service.ServiceRegistry;
+import org.gradle.util.CollectionUtils;
 
 import java.io.File;
 import java.util.Collections;
@@ -66,18 +75,10 @@ public class CompositeProjectDependencyResolver implements ComponentMetaDataReso
                 return;
             }
 
-            LocalComponentMetaData metaData = buildProjectComponentMetadata(compositeTarget, collectTargetConfigurations(dependency));
+            LocalComponentMetaData metaData = buildProjectComponentMetadata(compositeTarget);
             result.resolved(metaData);
             result.setSelectionReason(VersionSelectionReasons.COMPOSITE_BUILD);
         }
-    }
-
-    private Set<String> collectTargetConfigurations(DependencyMetaData dependency) {
-        Set<String> configurations = Sets.newHashSet();
-        for (String moduleConfiguration : dependency.getModuleConfigurations()) {
-            Collections.addAll(configurations, dependency.getDependencyConfigurations(moduleConfiguration, ""));
-        }
-        return configurations;
     }
 
     private CompositeBuildContext.Publication findCompositeTarget(ModuleComponentSelector selector) {
@@ -85,14 +86,15 @@ public class CompositeProjectDependencyResolver implements ComponentMetaDataReso
         return mappings.get(candidate);
     }
 
-    private LocalComponentMetaData buildProjectComponentMetadata(CompositeBuildContext.Publication publication, Set<String> configurations) {
+    private LocalComponentMetaData buildProjectComponentMetadata(CompositeBuildContext.Publication publication) {
         String projectPath = publication.getProjectPath();
         ModuleVersionIdentifier moduleVersionIdentifier = new DefaultModuleVersionIdentifier(publication.getModuleId(), "1");
         ComponentIdentifier componentIdentifier = new DefaultCompositeProjectComponentIdentifier(projectPath);
         DefaultLocalComponentMetaData metadata = new DefaultLocalComponentMetaData(moduleVersionIdentifier, componentIdentifier, "integration");
 
-        metadata.addConfiguration("compile", "", Collections.<String>emptySet(), Sets.newHashSet("compile"), true, true, new DefaultTaskDependency());
-        metadata.addConfiguration("default", "", Sets.newHashSet("compile"), Sets.newHashSet("compile", "default"), true, true, new DefaultTaskDependency());
+        final TaskDependency buildDependencies = createTaskDependency(publication);
+        metadata.addConfiguration("compile", "", Collections.<String>emptySet(), Sets.newHashSet("compile"), true, true, buildDependencies);
+        metadata.addConfiguration("default", "", Sets.newHashSet("compile"), Sets.newHashSet("compile", "default"), true, true, buildDependencies);
 
         for (ModuleVersionIdentifier dependency : publication.getDependencies()) {
             DefaultExternalModuleDependency externalModuleDependency = new DefaultExternalModuleDependency(dependency.getGroup(), dependency.getName(), dependency.getVersion());
@@ -100,9 +102,36 @@ public class CompositeProjectDependencyResolver implements ComponentMetaDataReso
             metadata.addDependency(dependencyMetaData);
         }
 
-        metadata.addArtifacts("default", publication.getArtifacts());
+        Set<PublishArtifact> artifacts = CollectionUtils.collect(publication.getArtifacts(), new Transformer<PublishArtifact, File>() {
+            @Override
+            public PublishArtifact transform(File file) {
+                return new FilePublishArtifact(file, buildDependencies);
+            }
+        });
+        metadata.addArtifacts("compile", artifacts);
 
         return metadata;
+    }
+
+    private TaskDependency createTaskDependency(final CompositeBuildContext.Publication publication) {
+        final String taskName = "createExternalProject_" + publication.getModuleId().getGroup() + "_" + publication.getModuleId().getName();
+        return new TaskDependency() {
+            @Override
+            public Set<? extends Task> getDependencies(Task task) {
+                TaskContainer tasks = task.getProject().getTasks();
+                Task depTask = tasks.findByName(taskName);
+                if (depTask == null) {
+                    depTask = tasks.create(taskName, GradleBuild.class, new Action<GradleBuild>() {
+                        @Override
+                        public void execute(GradleBuild gradleBuild) {
+                            gradleBuild.setDir(publication.getProjectDirectory());
+                            gradleBuild.setTasks(Collections.singleton(publication.getTaskName()));
+                        }
+                    });
+                }
+                return Collections.singleton(depTask);
+            };
+        };
     }
 
     public void resolve(ComponentIdentifier identifier, ComponentOverrideMetadata componentOverrideMetadata, BuildableComponentResolveResult result) {
@@ -146,4 +175,27 @@ public class CompositeProjectDependencyResolver implements ComponentMetaDataReso
     private boolean isCompositeProjectId(ComponentIdentifier componentId) {
         return componentId instanceof CompositeProjectComponentIdentifier;
     }
+
+    public static class FilePublishArtifact extends DefaultPublishArtifact {
+        private final TaskDependency buildDeps;
+
+        public FilePublishArtifact(File file, TaskDependency buildDependencies) {
+            super(determineName(file), determineExtension(file), "jar", null, null, file);
+            this.buildDeps = buildDependencies;
+        }
+
+        @Override
+        public TaskDependency getBuildDependencies() {
+            return buildDeps;
+        }
+
+        private static String determineExtension(File file) {
+            return StringUtils.substringAfterLast(file.getName(), ".");
+        }
+
+        private static String determineName(File file) {
+            return StringUtils.substringBeforeLast(file.getName(), ".");
+        }
+    }
+
 }
