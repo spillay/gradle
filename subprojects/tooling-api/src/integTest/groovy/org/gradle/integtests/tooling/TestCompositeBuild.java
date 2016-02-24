@@ -17,7 +17,6 @@
 package org.gradle.integtests.tooling;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import org.gradle.StartParameter;
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeBuildContext;
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.DefaultCompositeBuildContext;
@@ -39,8 +38,6 @@ import org.gradle.launcher.exec.DefaultBuildActionParameters;
 import org.gradle.logging.LoggingServiceRegistry;
 
 import java.io.File;
-import java.util.Collections;
-import java.util.Set;
 
 public class TestCompositeBuild {
     public static void main(String[] args) {
@@ -72,9 +69,7 @@ public class TestCompositeBuild {
     private static DefaultCompositeBuildContext configureComposite() {
         DefaultCompositeBuildContext defaultCompositeBuildContext = new DefaultCompositeBuildContext();
         String projectDir = "/Users/daz/dev/gradle/gradle/design-docs/features/composite-build/dependency-substitution/demo/projects/B/y";
-        String jarPath = "/Users/daz/dev/gradle/gradle/design-docs/features/composite-build/dependency-substitution/demo/projects/B/y/build/libs/y-1.0.jar";
-        Set<String> dependencies = Sets.newHashSet("log4j:log4j:1.2.4", "junit:junit:4.0");
-        defaultCompositeBuildContext.register("org:y", "B::y", dependencies, Collections.singleton(jarPath), projectDir, "build");
+        defaultCompositeBuildContext.register("org:y", "B::y", projectDir);
         return defaultCompositeBuildContext;
     }
 

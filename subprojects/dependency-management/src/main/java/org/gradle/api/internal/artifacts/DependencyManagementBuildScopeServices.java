@@ -250,6 +250,10 @@ class DependencyManagementBuildScopeServices {
         }
     }
 
+    CompositeBuildController createCompositeBuildController(ServiceRegistry registry) {
+        return new DefaultCompositeBuildController(registry);
+    }
+
     CompositeProjectDependencyResolver createCompositeDependencyResolver(ServiceRegistry serviceRegistry) {
         return new CompositeProjectDependencyResolver(serviceRegistry);
     }

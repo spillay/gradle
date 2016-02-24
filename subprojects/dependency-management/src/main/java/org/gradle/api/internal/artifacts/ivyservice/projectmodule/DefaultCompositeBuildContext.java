@@ -18,12 +18,9 @@ package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 
 import com.google.common.collect.Sets;
 import org.gradle.api.artifacts.ModuleIdentifier;
-import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier;
-import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier;
 
 import java.io.File;
-import java.util.Collection;
 import java.util.Set;
 
 public class DefaultCompositeBuildContext implements CompositeBuildContext {
@@ -35,32 +32,20 @@ public class DefaultCompositeBuildContext implements CompositeBuildContext {
     }
 
     @Override
-    public void register(String module, String projectPath, Set<String> dependencies, Set<String> artifacts, String projectDir, String taskName) {
-        publications.add(new RegisteredProjectPublication(module, projectPath, dependencies, artifacts, projectDir, taskName));
+    public void register(String module, String projectPath, String projectDir) {
+        publications.add(new RegisteredProjectPublication(module, projectPath, projectDir));
     }
 
-    private static class RegisteredProjectPublication implements Publication {
+    public static class RegisteredProjectPublication implements Publication {
         ModuleIdentifier moduleId;
         String projectPath;
-        Set<ModuleVersionIdentifier> dependencies = Sets.newLinkedHashSet();
-        Set<File> artifacts = Sets.newLinkedHashSet();
         File projectDirectory;
-        String taskName;
 
-        public RegisteredProjectPublication(String module, String projectPath, Collection<String> dependencies, Collection<String> artifacts, String projectDir, String taskName) {
+        public RegisteredProjectPublication(String module, String projectPath, String projectDir) {
             String[] ga = module.split(":");
             this.moduleId = DefaultModuleIdentifier.newId(ga[0], ga[1]);
             this.projectPath = projectPath;
-            for (String dependency : dependencies) {
-                String[] gav = dependency.split(":");
-                this.dependencies.add(DefaultModuleVersionIdentifier.newId(gav[0], gav[1], gav[2]));
-            }
-            for (String artifact : artifacts) {
-                File artifactFile = new File(artifact);
-                this.artifacts.add(artifactFile);
-            }
             this.projectDirectory = new File(projectDir);
-            this.taskName = taskName;
         }
 
         @Override
@@ -74,23 +59,8 @@ public class DefaultCompositeBuildContext implements CompositeBuildContext {
         }
 
         @Override
-        public Set<ModuleVersionIdentifier> getDependencies() {
-            return dependencies;
-        }
-
-        @Override
-        public Set<File> getArtifacts() {
-            return artifacts;
-        }
-
-        @Override
         public File getProjectDirectory() {
             return projectDirectory;
-        }
-
-        @Override
-        public String getTaskName() {
-            return taskName;
         }
     }
 }

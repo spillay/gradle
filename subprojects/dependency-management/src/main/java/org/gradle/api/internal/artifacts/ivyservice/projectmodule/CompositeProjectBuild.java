@@ -16,20 +16,28 @@
 
 package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 
-import org.gradle.api.artifacts.ModuleIdentifier;
+import org.gradle.api.DefaultTask;
+import org.gradle.api.tasks.TaskAction;
 
-import java.io.File;
 import java.util.Set;
 
-public interface CompositeBuildContext {
-    Set<Publication> getPublications();
+public class CompositeProjectBuild extends DefaultTask {
+    private CompositeBuildController controller;
+    private String projectPath;
+    private Set<String> taskNames;
 
-    void register(String module, String projectPath, String projectDirectory);
-
-    interface Publication {
-        ModuleIdentifier getModuleId();
-        String getProjectPath();
-
-        File getProjectDirectory();
+    public CompositeProjectBuild() {
+        this.controller = getServices().get(CompositeBuildController.class);
     }
+
+    public void conf(String path, Set<String> taskNames) {
+        projectPath = path;
+        this.taskNames = taskNames;
+    }
+
+    @TaskAction
+    void build() {
+        controller.build(projectPath, taskNames);
+    }
+
 }

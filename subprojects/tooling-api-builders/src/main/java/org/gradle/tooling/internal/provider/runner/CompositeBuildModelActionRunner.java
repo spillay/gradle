@@ -160,7 +160,7 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
                         return file.getAbsolutePath();
                     }
                 });
-                publications.register(moduleId(publication.getId()), compositePath, deps, artifacts, null, null);
+                publications.register(moduleId(publication.getId()), compositePath, null);
             }
         }
     }
