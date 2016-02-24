@@ -22,19 +22,16 @@ import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeBuild
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeContextBuilder;
 import org.gradle.configuration.GradleLauncherMetaData;
 import org.gradle.initialization.*;
-import org.gradle.internal.SystemProperties;
 import org.gradle.internal.classpath.ClassPath;
 import org.gradle.internal.nativeintegration.services.NativeServices;
 import org.gradle.internal.service.DefaultServiceRegistry;
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.internal.service.ServiceRegistryBuilder;
+import org.gradle.internal.service.scopes.BuildSessionScopeServices;
 import org.gradle.internal.service.scopes.GlobalScopeServices;
-import org.gradle.launcher.cli.ExecuteBuildAction;
-import org.gradle.launcher.daemon.configuration.DaemonParameters;
 import org.gradle.launcher.exec.BuildActionExecuter;
 import org.gradle.launcher.exec.BuildActionParameters;
 import org.gradle.launcher.exec.BuildExecuter;
-import org.gradle.launcher.exec.DefaultBuildActionParameters;
 import org.gradle.logging.LoggingServiceRegistry;
 
 import java.io.File;
@@ -49,14 +46,10 @@ public class TestCompositeBuild {
                 .parent(NativeServices.getInstance())
                 .provider(new GlobalScopeServices(false))
                 .build();
-        BuildActionExecuter<BuildActionParameters> executer = globalServices.get(BuildExecuter.class);
 
         StartParameter startParameter = new StartParameter();
         startParameter.setTaskNames(Lists.newArrayList("clean", "dependencies", "build"));
         startParameter.setSearchUpwards(false);
-
-        DaemonParameters daemonParameters = new DaemonParameters(new BuildLayoutParameters());
-        daemonParameters.setEnabled(false);
 
         DefaultServiceRegistry compositeServices = (DefaultServiceRegistry) ServiceRegistryBuilder.builder()
             .parent(globalServices)
@@ -64,25 +57,14 @@ public class TestCompositeBuild {
         compositeServices.add(CompositeBuildContext.class, buildCompositeContext(globalServices));
         compositeServices.addProvider(new CompositeScopeServices(startParameter));
 
+        ServiceRegistry buildSessionServices = new BuildSessionScopeServices(compositeServices, startParameter, ClassPath.EMPTY);
+        DefaultBuildRequestContext requestContext = new DefaultBuildRequestContext(new DefaultBuildRequestMetaData(clientMetaData(), getBuildStartTime()), new DefaultBuildCancellationToken(), new NoOpBuildEventConsumer());
+
         try {
-            runBuild(startParameter, daemonParameters, executer, compositeServices);
+            globalServices.get(GradleLauncherFactory.class).newInstance(startParameter, requestContext, buildSessionServices).run();
         } finally {
             globalServices.close();
         }
-    }
-
-    private static Object runBuild(StartParameter startParameter, DaemonParameters daemonParameters, BuildActionExecuter<BuildActionParameters> executer, ServiceRegistry sharedServices) {
-        BuildActionParameters parameters = new DefaultBuildActionParameters(
-            daemonParameters.getEffectiveSystemProperties(),
-            System.getenv(),
-            SystemProperties.getInstance().getCurrentDir(),
-            startParameter.getLogLevel(),
-            daemonParameters.getDaemonUsage(), startParameter.isContinuous(), daemonParameters.isInteractive(), ClassPath.EMPTY);
-        return executer.execute(
-            new ExecuteBuildAction(startParameter),
-            new DefaultBuildRequestContext(new DefaultBuildRequestMetaData(clientMetaData(), getBuildStartTime()), new DefaultBuildCancellationToken(), new NoOpBuildEventConsumer()),
-            parameters,
-            sharedServices);
     }
 
     private static CompositeBuildContext buildCompositeContext(DefaultServiceRegistry globalServices) {
