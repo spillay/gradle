@@ -47,6 +47,8 @@ public class TestCompositeBuild {
                 .provider(new GlobalScopeServices(false))
                 .build();
 
+        GradleLauncherFactory launcherFactory = globalServices.get(GradleLauncherFactory.class);
+
         StartParameter startParameter = new StartParameter();
         startParameter.setTaskNames(Lists.newArrayList("clean", "dependencies", "build"));
         startParameter.setSearchUpwards(false);
@@ -62,7 +64,7 @@ public class TestCompositeBuild {
         DefaultBuildRequestContext requestContext = new DefaultBuildRequestContext(new DefaultBuildRequestMetaData(clientMetaData(), getBuildStartTime()), new DefaultBuildCancellationToken(), new NoOpBuildEventConsumer());
 
         try {
-            globalServices.get(GradleLauncherFactory.class).newInstance(startParameter, requestContext, buildSessionServices).run();
+            launcherFactory.newInstance(startParameter, requestContext, buildSessionServices).run();
         } finally {
             globalServices.close();
         }

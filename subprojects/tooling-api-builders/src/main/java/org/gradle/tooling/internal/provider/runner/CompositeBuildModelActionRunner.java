@@ -17,9 +17,9 @@
 package org.gradle.tooling.internal.provider.runner;
 
 import org.gradle.StartParameter;
-import org.gradle.api.Transformer;
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeBuildContext;
-import org.gradle.api.internal.artifacts.ivyservice.projectmodule.DefaultCompositeBuildContext;
+import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeContextBuilder;
+import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeScopeServices;
 import org.gradle.api.logging.LogLevel;
 import org.gradle.api.specs.Spec;
 import org.gradle.initialization.*;
@@ -27,7 +27,9 @@ import org.gradle.internal.Cast;
 import org.gradle.internal.classpath.ClassPath;
 import org.gradle.internal.invocation.BuildAction;
 import org.gradle.internal.invocation.BuildActionRunner;
+import org.gradle.internal.service.DefaultServiceRegistry;
 import org.gradle.internal.service.ServiceRegistry;
+import org.gradle.internal.service.ServiceRegistryBuilder;
 import org.gradle.internal.service.scopes.BuildSessionScopeServices;
 import org.gradle.launcher.daemon.configuration.DaemonUsage;
 import org.gradle.launcher.exec.BuildActionExecuter;
@@ -45,19 +47,13 @@ import org.gradle.tooling.internal.provider.BuildModelAction;
 import org.gradle.tooling.internal.provider.PayloadSerializer;
 import org.gradle.tooling.internal.provider.connection.CompositeParameters;
 import org.gradle.tooling.internal.provider.connection.GradleParticipantBuild;
-import org.gradle.tooling.model.GradleModuleVersion;
 import org.gradle.tooling.model.HierarchicalElement;
 import org.gradle.tooling.model.build.BuildEnvironment;
 import org.gradle.tooling.model.eclipse.EclipseProject;
-import org.gradle.tooling.model.gradle.BasicGradleProject;
-import org.gradle.tooling.model.gradle.GradleBuild;
-import org.gradle.tooling.model.gradle.GradlePublication;
-import org.gradle.tooling.model.gradle.ProjectPublications;
 import org.gradle.util.CollectionUtils;
 import org.gradle.util.GradleVersion;
 
 import java.io.File;
-import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -65,10 +61,6 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
     private Map<String, Class<? extends HierarchicalElement>> modelRequestTypeToModelTypeMapping = new HashMap<String, Class<? extends HierarchicalElement>>() {{
         this.put(SetOfEclipseProjects.class.getName(), EclipseProject.class);
     }};
-
-    private String moduleId(GradleModuleVersion id) {
-        return id.getGroup() + ":" + id.getName();
-    }
 
     private boolean supportsCompositeSubstitution(Set<BuildEnvironment> buildEnvironments) {
         final GradleVersion minimumVersion = GradleVersion.version("2.11");
@@ -106,63 +98,17 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         Set<Object> results = new LinkedHashSet<Object>();
         final CompositeParameters compositeParameters = actionParameters.getCompositeParameters();
 
-        // HACK: In order to add to the service registry before it is locked, we add the context here and mutate it later. This is pretty horrible.
-        ((BuildSessionScopeServices) buildScopeServices).add(CompositeBuildContext.class, new DefaultCompositeBuildContext());
         ProgressLoggerFactory progressLoggerFactory = buildScopeServices.get(ProgressLoggerFactory.class);
 
         final List<GradleParticipantBuild> participantBuilds = compositeParameters.getBuilds();
         final Set<BuildEnvironment> buildEnvironments = fetchModelsViaToolingAPI(BuildEnvironment.class, participantBuilds, compositeParameters, cancellationToken, progressLoggerFactory);
         Class<? extends HierarchicalElement> modelType = getModelType(modelAction);
         if (supportsCompositeSubstitution(buildEnvironments)) {
-            constructCompositeContext(cancellationToken, buildScopeServices, compositeParameters, participantBuilds);
-            results.addAll(fetchModelsInProcess(modelAction, modelType, compositeParameters.getBuilds(), cancellationToken, buildScopeServices));
+            results.addAll(fetchCompositeModelsInProcess(modelAction, modelType, compositeParameters.getBuilds(), cancellationToken, buildScopeServices));
         } else {
             results.addAll(fetchModelsViaToolingAPI(modelType, compositeParameters.getBuilds(), compositeParameters, cancellationToken, progressLoggerFactory));
         }
         return results;
-    }
-
-    private void constructCompositeContext(BuildCancellationToken cancellationToken, ServiceRegistry buildScopeServices, CompositeParameters compositeParameters, List<GradleParticipantBuild> participantBuilds) {
-        CompositeBuildContext publications = buildScopeServices.get(CompositeBuildContext.class);
-        for (GradleParticipantBuild participant : participantBuilds) {
-            if (cancellationToken.isCancellationRequested()) {
-                break;
-            }
-            // TODO: Need to figure out a way to determine participant name
-            final String participantName = participant.getProjectDir().getName();
-            ProjectConnection projectConnection = connect(participant, compositeParameters);
-            try {
-                PublicationSetForParticipant result = projectConnection.action(new RetrievePublicationAction()).
-                    withCancellationToken(new CancellationTokenAdapter(cancellationToken)).
-                    run();
-                registerPublicationsForParticipant(publications, participantName, result);
-            } finally {
-                projectConnection.close();
-            }
-        }
-    }
-
-    private void registerPublicationsForParticipant(CompositeBuildContext publications, String participantName, PublicationSetForParticipant publicationSetForParticipant) {
-        for (Map.Entry<String, ProjectPublications> publicationForProject : publicationSetForParticipant.projectsToPublication.entrySet()) {
-            String projectPath = publicationForProject.getKey();
-            ProjectPublications pubs = publicationForProject.getValue();
-
-            for (GradlePublication publication : pubs.getPublications().getAll()) {
-                String compositePath = participantName + ":" + projectPath;
-                Set<String> deps = CollectionUtils.collect(publication.getDependencies(), new Transformer<String, GradleModuleVersion>() {
-                    public String transform(GradleModuleVersion id) {
-                        return id.getGroup() + ":" + id.getName() + ":" + id.getVersion();
-                    }
-                });
-                Set<String> artifacts = CollectionUtils.collect(publication.getArtifacts(), new Transformer<String, File>() {
-                    @Override
-                    public String transform(File file) {
-                        return file.getAbsolutePath();
-                    }
-                });
-//                publications.register(moduleId(publication.getId()), compositePath, null);
-            }
-        }
     }
 
     private <T> Set<T> fetchModelsViaToolingAPI(Class<T> modelType, List<GradleParticipantBuild> participantBuilds, CompositeParameters compositeParameters, BuildCancellationToken cancellationToken, ProgressLoggerFactory progressLoggerFactory) {
@@ -180,7 +126,7 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
                 break;
             }
             try {
-                accumulate(results, modelBuilder.get());
+                accumulateModels(results, modelBuilder.get());
             } catch (GradleConnectionException e) {
                 throw new CompositeBuildExceptionVersion1(e);
             } finally {
@@ -190,35 +136,49 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         return results;
     }
 
-    private <T extends HierarchicalElement> Set<T> fetchModelsInProcess(BuildModelAction modelAction, Class<T> modelType, List<GradleParticipantBuild> participantBuilds, final BuildCancellationToken cancellationToken, ServiceRegistry buildSessionScopedServices) {
+    private CompositeBuildContext constructCompositeContext(GradleLauncherFactory gradleLauncherFactory, List<GradleParticipantBuild> participantBuilds) {
+        CompositeContextBuilder builder = new CompositeContextBuilder(gradleLauncherFactory);
+        for (GradleParticipantBuild participant : participantBuilds) {
+            final String participantName = participant.getProjectDir().getName();
+            builder.addParticipant(participantName, participant.getProjectDir());
+        }
+        return builder.build();
+    }
+
+    private <T extends HierarchicalElement> Set<T> fetchCompositeModelsInProcess(BuildModelAction modelAction, Class<T> modelType, List<GradleParticipantBuild> participantBuilds,
+                                                                                 BuildCancellationToken cancellationToken, ServiceRegistry sharedServices) {
         final Set<T> results = new LinkedHashSet<T>();
 
-        GradleLauncherFactory gradleLauncherFactory = buildSessionScopedServices.get(GradleLauncherFactory.class);
+        GradleLauncherFactory gradleLauncherFactory = sharedServices.get(GradleLauncherFactory.class);
+        CompositeBuildContext context = constructCompositeContext(gradleLauncherFactory, participantBuilds);
+
+        DefaultServiceRegistry compositeServices = (DefaultServiceRegistry) ServiceRegistryBuilder.builder()
+            .displayName("Composite services")
+            .parent(sharedServices)
+            .build();
+        compositeServices.add(CompositeBuildContext.class, context);
+        compositeServices.addProvider(new CompositeScopeServices(modelAction.getStartParameter(), compositeServices));
+
         BuildActionRunner runner = new NonSerializingBuildModelActionRunner();
         BuildActionExecuter<BuildActionParameters> buildActionExecuter = new InProcessBuildActionExecuter(gradleLauncherFactory, runner);
         DefaultBuildRequestContext requestContext = new DefaultBuildRequestContext(new DefaultBuildRequestMetaData(System.currentTimeMillis()), cancellationToken, new NoOpBuildEventConsumer());
 
         ProtocolToModelAdapter protocolToModelAdapter = new ProtocolToModelAdapter();
 
-
         for (GradleParticipantBuild participant : participantBuilds) {
-            if (cancellationToken.isCancellationRequested()) {
-                break;
-            }
-
             DefaultBuildActionParameters actionParameters = new DefaultBuildActionParameters(Collections.EMPTY_MAP, Collections.<String, String>emptyMap(), participant.getProjectDir(), LogLevel.INFO, DaemonUsage.EXPLICITLY_DISABLED, false, true, ClassPath.EMPTY);
 
             StartParameter startParameter = modelAction.getStartParameter().newInstance();
             startParameter.setProjectDir(participant.getProjectDir());
 
-            if (cancellationToken.isCancellationRequested()) {
-                break;
-            }
+            ServiceRegistry buildScopedServices = new BuildSessionScopeServices(compositeServices, startParameter, ClassPath.EMPTY);
+
             BuildModelAction mappedAction = new BuildModelAction(startParameter, modelType.getName(), modelAction.isRunTasks(), modelAction.getClientSubscriptions());
-            Object result = buildActionExecuter.execute(mappedAction, requestContext, actionParameters, buildSessionScopedServices);
+
+            Object result = buildActionExecuter.execute(mappedAction, requestContext, actionParameters, buildScopedServices);
             T castResult = protocolToModelAdapter.adapt(modelType, result);
             try {
-                accumulate(results, castResult);
+                accumulateModels(results, castResult);
             } catch (GradleConnectionException e) {
                 throw new CompositeBuildExceptionVersion1(e);
             }
@@ -226,15 +186,12 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         return results;
     }
 
-    private static final class PublicationSetForParticipant implements Serializable {
-        Map<String, ProjectPublications> projectsToPublication; // : or :x -> publications
-    }
-
-    private <T> void accumulate(Set<T> allResults, T element) {
+    private <T> void accumulateModels(Set<T> allResults, T element) {
         allResults.add(Cast.<T>uncheckedCast(element));
         if (element instanceof HierarchicalElement) {
             for (Object child : ((HierarchicalElement) element).getChildren().getAll()) {
-                accumulate(allResults, (T) child);
+                T o = Cast.uncheckedCast(child);
+                accumulateModels(allResults, o);
             }
         }
     }
@@ -306,22 +263,4 @@ public class CompositeBuildModelActionRunner implements CompositeBuildActionRunn
         }
     }
 
-    private final static class RetrievePublicationAction implements org.gradle.tooling.BuildAction<PublicationSetForParticipant> {
-        @Override
-        public PublicationSetForParticipant execute(BuildController controller) {
-            GradleBuild buildModel = controller.getBuildModel();
-            PublicationSetForParticipant publicationSetForParticipant = new PublicationSetForParticipant();
-            publicationSetForParticipant.projectsToPublication = new HashMap<String, ProjectPublications>();
-            accumulate(controller, buildModel.getRootProject(), publicationSetForParticipant);
-            return publicationSetForParticipant;
-        }
-
-        private void accumulate(BuildController controller, BasicGradleProject project, PublicationSetForParticipant result) {
-            ProjectPublications projectPublications = controller.getModel(project, ProjectPublications.class);
-            result.projectsToPublication.put(project.getPath(), projectPublications);
-            for (BasicGradleProject child : project.getChildren()) {
-                accumulate(controller, child, result);
-            }
-        }
-    }
 }
