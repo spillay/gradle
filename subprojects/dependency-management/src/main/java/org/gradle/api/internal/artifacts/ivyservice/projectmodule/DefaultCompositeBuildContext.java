@@ -18,17 +18,34 @@ package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 
 import com.google.common.collect.Sets;
 import org.gradle.api.artifacts.ModuleIdentifier;
+import org.gradle.api.artifacts.component.ModuleComponentSelector;
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier;
 
 import java.io.File;
 import java.util.Set;
 
 public class DefaultCompositeBuildContext implements CompositeBuildContext {
-    private final Set<Publication> publications = Sets.newLinkedHashSet();
+    private final Set<RegisteredProjectPublication> publications = Sets.newLinkedHashSet();
 
     @Override
-    public Set<Publication> getPublications() {
-        return publications;
+    public String getReplacementProjectPath(ModuleComponentSelector selector) {
+        String candidate = selector.getGroup() + ":" + selector.getModule();
+        for (RegisteredProjectPublication publication : publications) {
+            if (publication.getModuleId().toString().equals(candidate)) {
+                return publication.getProjectPath();
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public File getProjectDirectory(String projectPath) {
+        for (RegisteredProjectPublication publication : publications) {
+            if (publication.getProjectPath().equals(projectPath)) {
+                return publication.getProjectDirectory();
+            }
+        }
+        return null;
     }
 
     @Override
@@ -36,7 +53,7 @@ public class DefaultCompositeBuildContext implements CompositeBuildContext {
         publications.add(new RegisteredProjectPublication(module, projectPath, projectDir));
     }
 
-    public static class RegisteredProjectPublication implements Publication {
+    public static class RegisteredProjectPublication {
         ModuleIdentifier moduleId;
         String projectPath;
         File projectDirectory;
@@ -48,17 +65,14 @@ public class DefaultCompositeBuildContext implements CompositeBuildContext {
             this.projectDirectory = new File(projectDir);
         }
 
-        @Override
         public ModuleIdentifier getModuleId() {
             return moduleId;
         }
 
-        @Override
         public String getProjectPath() {
             return projectPath;
         }
 
-        @Override
         public File getProjectDirectory() {
             return projectDirectory;
         }

@@ -16,20 +16,18 @@
 
 package org.gradle.api.internal.artifacts.ivyservice.projectmodule;
 
-import org.gradle.api.artifacts.ModuleIdentifier;
+import org.gradle.api.artifacts.component.ModuleComponentSelector;
 
 import java.io.File;
-import java.util.Set;
 
 public interface CompositeBuildContext {
-    Set<Publication> getPublications();
+    String getReplacementProjectPath(ModuleComponentSelector moduleComponentSelector);
+    File getProjectDirectory(String projectPath);
 
     void register(String module, String projectPath, String projectDirectory);
 
     interface Publication {
-        ModuleIdentifier getModuleId();
         String getProjectPath();
-
         File getProjectDirectory();
     }
 }

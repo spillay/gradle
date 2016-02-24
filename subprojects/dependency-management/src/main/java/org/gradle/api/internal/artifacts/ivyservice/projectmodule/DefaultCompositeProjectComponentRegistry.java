@@ -25,7 +25,10 @@ import org.gradle.api.Action;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.Task;
 import org.gradle.api.Transformer;
-import org.gradle.api.artifacts.*;
+import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.Dependency;
+import org.gradle.api.artifacts.ModuleVersionIdentifier;
+import org.gradle.api.artifacts.PublishArtifact;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentSelector;
 import org.gradle.api.internal.GradleInternal;
@@ -35,7 +38,6 @@ import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies
 import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies.ExternalModuleIvyDependencyDescriptorFactory;
 import org.gradle.api.internal.artifacts.publish.DefaultPublishArtifact;
 import org.gradle.api.internal.project.ProjectInternal;
-import org.gradle.api.specs.Spec;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.TaskContainer;
 import org.gradle.api.tasks.TaskDependency;
@@ -58,7 +60,7 @@ public class DefaultCompositeProjectComponentRegistry implements CompositeProjec
     private final CompositeBuildContext context;
     private final GradleLauncherFactory gradleLauncherFactory;
     private final StartParameter startParameter;
-    private final Map<String, ProjectMetaData> cachedMetadata = Maps.newHashMap();
+    private final Map<String, LocalComponentMetaData> cachedMetadata = Maps.newHashMap();
     private final Map<String, GradleLauncher> cachedLaunchers = Maps.newHashMap();
 
     public DefaultCompositeProjectComponentRegistry(ServiceRegistry registry) {
@@ -69,49 +71,62 @@ public class DefaultCompositeProjectComponentRegistry implements CompositeProjec
 
     @Override
     public String getReplacementProject(ModuleComponentSelector selector) {
-        String candidate = selector.getGroup() + ":" + selector.getModule();
-        for (CompositeBuildContext.Publication publication : context.getPublications()) {
-            if (publication.getModuleId().toString().equals(candidate)) {
-                return publication.getProjectPath();
-            }
-        }
-        return null;
+        return context.getReplacementProjectPath(selector);
     }
 
     @Override
     public LocalComponentMetaData getComponentMetadata(String projectPath) {
-        ProjectMetaData projectMetaData = getMetaData(projectPath);
-        return buildProjectComponentMetadata(projectPath, projectMetaData);
+        if (cachedMetadata.containsKey(projectPath)) {
+            return cachedMetadata.get(projectPath);
+        }
+        LocalComponentMetaData localComponentMetaData = buildLocalComponentMetadata(projectPath);
+        cachedMetadata.put(projectPath, localComponentMetaData);
+
+        return localComponentMetaData;
     }
 
-    private LocalComponentMetaData buildProjectComponentMetadata(String projectPath, ProjectMetaData publication) {
-        ModuleVersionIdentifier moduleVersionIdentifier = new DefaultModuleVersionIdentifier(publication.getModuleId(), "1");
-        ComponentIdentifier componentIdentifier = new DefaultCompositeProjectComponentIdentifier(projectPath);
-        DefaultLocalComponentMetaData metadata = new DefaultLocalComponentMetaData(moduleVersionIdentifier, componentIdentifier, "integration");
+    private LocalComponentMetaData buildLocalComponentMetadata(String projectPath) {
+        File projectDirectory = context.getProjectDirectory(projectPath);
+        StartParameter param = startParameter.newBuild();
+        param.setProjectDir(projectDirectory);
+        GradleLauncher launcher = gradleLauncherFactory.newInstance(param);
 
-        Set<PublishArtifact> artifacts = CollectionUtils.collect(publication.getArtifacts(), new Transformer<PublishArtifact, File>() {
+        BuildResult buildAnalysis = launcher.getBuildAnalysis();
+        GradleInternal gradle = (GradleInternal) buildAnalysis.getGradle();
+        ProjectInternal defaultProject = gradle.getDefaultProject();
+
+        cachedLaunchers.put(projectPath, launcher);
+
+        final ModuleVersionIdentifier id = determineIdentifier(defaultProject);
+        final Set<ModuleVersionIdentifier> dependencies = determineDependencies(defaultProject, Dependency.DEFAULT_CONFIGURATION);
+        final Set<File> artifacts = determineArtifacts(defaultProject, Dependency.ARCHIVES_CONFIGURATION);
+        final Set<String> taskNames = determineTaskNames(defaultProject, Dependency.ARCHIVES_CONFIGURATION);
+
+        ComponentIdentifier componentIdentifier = new DefaultCompositeProjectComponentIdentifier(projectPath);
+        DefaultLocalComponentMetaData metadata = new DefaultLocalComponentMetaData(id, componentIdentifier, "integration");
+
+        Set<PublishArtifact> publishArtifacts = CollectionUtils.collect(artifacts, new Transformer<PublishArtifact, File>() {
             @Override
             public PublishArtifact transform(File file) {
                 return new FilePublishArtifact(file);
             }
         });
-        TaskDependency buildDependencies = createTaskDependency(projectPath, publication.getModuleId(), publication.getTaskNames());
+        TaskDependency buildDependencies = createTaskDependency(projectPath, id, taskNames);
 
         metadata.addConfiguration("compile", "", Collections.<String>emptySet(), Sets.newHashSet("compile"), true, true, buildDependencies);
         metadata.addConfiguration("default", "", Sets.newHashSet("compile"), Sets.newHashSet("compile", "default"), true, true, buildDependencies);
 
-        for (ModuleVersionIdentifier dependency : publication.getDependencies()) {
+        for (ModuleVersionIdentifier dependency : dependencies) {
             DefaultExternalModuleDependency externalModuleDependency = new DefaultExternalModuleDependency(dependency.getGroup(), dependency.getName(), dependency.getVersion());
             DependencyMetaData dependencyMetaData = new ExternalModuleIvyDependencyDescriptorFactory(new DefaultExcludeRuleConverter()).createDependencyDescriptor("compile", externalModuleDependency);
             metadata.addDependency(dependencyMetaData);
         }
 
-        metadata.addArtifacts("compile", artifacts);
-
+        metadata.addArtifacts("compile", publishArtifacts);
         return metadata;
     }
 
-    private TaskDependency createTaskDependency(final String projectPath, ModuleIdentifier moduleId, final Set<String> taskNames) {
+    private TaskDependency createTaskDependency(final String projectPath, ModuleVersionIdentifier moduleId, final Set<String> taskNames) {
         final String taskName = "createExternalProject_" + moduleId.getGroup() + "_" + moduleId.getName();
         return new TaskDependency() {
             @Override
@@ -131,33 +146,8 @@ public class DefaultCompositeProjectComponentRegistry implements CompositeProjec
         };
     }
 
-    public ProjectMetaData getMetaData(final String projectPath) {
-        if (cachedMetadata.containsKey(projectPath)) {
-            return cachedMetadata.get(projectPath);
-        }
-        // TODO:DAZ Should be cached for a build invocation
-        final CompositeBuildContext.Publication publication1 = getPublication(projectPath);
-
-        StartParameter param = startParameter.newBuild();
-        param.setProjectDir(publication1.getProjectDirectory());
-        GradleLauncher launcher = gradleLauncherFactory.newInstance(param);
-
-        // TODO:DAZ Keep the launcher in this state for later running tasks, or make it possible to use a previous `Gradle` instance in the launcher.
-        BuildResult buildAnalysis = launcher.getBuildAnalysis();
-        GradleInternal gradle = (GradleInternal) buildAnalysis.getGradle();
-        ProjectInternal defaultProject = gradle.getDefaultProject();
-
-        final Set<ModuleVersionIdentifier> dependencies = determineDependencies(defaultProject, Dependency.DEFAULT_CONFIGURATION);
-        final Set<File> artifacts = determineArtifacts(defaultProject, Dependency.ARCHIVES_CONFIGURATION);
-        final Set<String> taskNames = determineTaskNames(defaultProject, Dependency.ARCHIVES_CONFIGURATION);
-
-        final CompositeBuildContext.Publication publication = getPublication(projectPath);
-        ProjectMetaData projectMetaData = new ProjectMetaData(publication, dependencies, artifacts, taskNames);
-
-        cachedMetadata.put(projectPath, projectMetaData);
-        cachedLaunchers.put(projectPath, launcher);
-
-        return projectMetaData;
+    private ModuleVersionIdentifier determineIdentifier(ProjectInternal defaultProject) {
+        return DefaultModuleVersionIdentifier.newId(defaultProject.getModule());
     }
 
     private Set<ModuleVersionIdentifier> determineDependencies(ProjectInternal defaultProject, String configurationName) {
@@ -200,15 +190,6 @@ public class DefaultCompositeProjectComponentRegistry implements CompositeProjec
         }
     }
 
-    private CompositeBuildContext.Publication getPublication(final String projectPath) {
-        return CollectionUtils.findFirst(context.getPublications(), new Spec<CompositeBuildContext.Publication>() {
-            @Override
-            public boolean isSatisfiedBy(CompositeBuildContext.Publication element) {
-                return element.getProjectPath().equals(projectPath);
-            }
-        });
-    }
-
     public static class CompositeProjectBuild extends DefaultTask {
         private DefaultCompositeProjectComponentRegistry controller;
         private String projectPath;
@@ -237,36 +218,6 @@ public class DefaultCompositeProjectComponentRegistry implements CompositeProjec
 
         private static String determineName(File file) {
             return StringUtils.substringBeforeLast(file.getName(), ".");
-        }
-    }
-
-    private static class ProjectMetaData {
-        private final CompositeBuildContext.Publication publication;
-        private final Set<ModuleVersionIdentifier> dependencies;
-        private final Set<File> artifacts;
-        private final Set<String> taskNames;
-
-        public ProjectMetaData(CompositeBuildContext.Publication publication, Set<ModuleVersionIdentifier> dependencies, Set<File> artifacts, Set<String> taskNames) {
-            this.publication = publication;
-            this.dependencies = dependencies;
-            this.artifacts = artifacts;
-            this.taskNames = taskNames;
-        }
-
-        public ModuleIdentifier getModuleId() {
-            return publication.getModuleId();
-        }
-
-        public Set<ModuleVersionIdentifier> getDependencies() {
-            return dependencies;
-        }
-
-        public Set<File> getArtifacts() {
-            return artifacts;
-        }
-
-        public Set<String> getTaskNames() {
-            return taskNames;
         }
     }
 }
