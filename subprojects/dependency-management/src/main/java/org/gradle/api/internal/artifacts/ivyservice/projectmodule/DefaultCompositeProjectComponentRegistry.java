@@ -85,6 +85,14 @@ public class DefaultCompositeProjectComponentRegistry implements CompositeProjec
         return localComponentMetaData;
     }
 
+    // TODO:DAZ Make this work for a producer multiproject: that means configuring the multiproject build _once_,
+    // and executing tasks multiple times? (This won't work: can only execute once per configuration)
+
+    // Options:
+    // 1. Configure each root (for coordinates) and each subproject build independently (for metadata + task execution)
+    // 2. Configure each root project build once fully (to calculate coordinates). Reuse this for the first subsequent configure of a subproject.
+    // 3. Configure root project once only, and collect the different things that might need to be built: build one, build all
+    // 4. Configure root project once only, and allow tasks to be added to the task graph for re-execution
     private LocalComponentMetaData buildLocalComponentMetadata(String projectPath) {
         File projectDirectory = context.getProjectDirectory(projectPath);
         StartParameter param = startParameter.newBuild();

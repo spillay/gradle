@@ -70,6 +70,8 @@ public class TestCompositeBuild {
         DefaultCompositeBuildContext defaultCompositeBuildContext = new DefaultCompositeBuildContext();
         String projectDir = "/Users/daz/dev/gradle/gradle/design-docs/features/composite-build/dependency-substitution/demo/projects/B/y";
         defaultCompositeBuildContext.register("org:y", "B::y", projectDir);
+        String projectDirz = "/Users/daz/dev/gradle/gradle/design-docs/features/composite-build/dependency-substitution/demo/projects/B/z";
+        defaultCompositeBuildContext.register("org:z", "B::z", projectDirz);
         return defaultCompositeBuildContext;
     }
 
