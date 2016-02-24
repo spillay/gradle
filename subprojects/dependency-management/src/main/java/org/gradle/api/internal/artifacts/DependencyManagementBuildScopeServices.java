@@ -58,6 +58,7 @@ import org.gradle.internal.resource.local.ivy.LocallyAvailableResourceFinderFact
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.logging.ProgressLoggerFactory;
 import org.gradle.util.BuildCommencedTimeProvider;
+import org.gradle.util.CollectionUtils;
 
 /**
  * The set of dependency management services that are created per build.
@@ -250,28 +251,25 @@ class DependencyManagementBuildScopeServices {
         }
     }
 
-    CompositeProjectComponentRegistry createCompositeBuildController(ServiceRegistry registry) {
-        return new DefaultCompositeProjectComponentRegistry(registry);
-    }
-
-    CompositeProjectDependencyResolver createCompositeDependencyResolver(ServiceRegistry serviceRegistry) {
-        return new CompositeProjectDependencyResolver(serviceRegistry);
-    }
-
-    ResolverProviderFactory createCompositeResolverProviderFactory(final CompositeProjectDependencyResolver resolver) {
-        return new CompositeProjectResolverProviderFactory(resolver);
+    ResolverProviderFactory createCompositeResolverProviderFactory(ServiceRegistry serviceRegistry) {
+        return new CompositeProjectResolverProviderFactory(serviceRegistry);
     }
 
     private static class CompositeProjectResolverProviderFactory implements ResolverProviderFactory {
         private final CompositeProjectDependencyResolver resolver;
 
-        public CompositeProjectResolverProviderFactory(CompositeProjectDependencyResolver resolver) {
-            this.resolver = resolver;
+        public CompositeProjectResolverProviderFactory(ServiceRegistry registry) {
+            CompositeProjectComponentRegistry controller = CollectionUtils.findSingle(registry.getAll(CompositeProjectComponentRegistry.class));
+            if (controller == null) {
+                resolver = null;
+            } else {
+                resolver = new CompositeProjectDependencyResolver(controller);
+            }
         }
 
         @Override
         public boolean canCreate(ResolveContext context) {
-            return true;
+            return resolver != null;
         }
 
         @Override

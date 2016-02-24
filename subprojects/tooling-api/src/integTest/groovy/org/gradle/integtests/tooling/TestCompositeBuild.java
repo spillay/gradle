@@ -62,6 +62,7 @@ public class TestCompositeBuild {
             .parent(globalServices)
             .build();
         compositeServices.add(CompositeBuildContext.class, buildCompositeContext(globalServices));
+        compositeServices.addProvider(new CompositeScopeServices(startParameter));
 
         try {
             runBuild(startParameter, daemonParameters, executer, compositeServices);

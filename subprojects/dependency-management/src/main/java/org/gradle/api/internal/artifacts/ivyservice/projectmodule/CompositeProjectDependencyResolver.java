@@ -30,19 +30,15 @@ import org.gradle.internal.resolve.result.BuildableArtifactResolveResult;
 import org.gradle.internal.resolve.result.BuildableArtifactSetResolveResult;
 import org.gradle.internal.resolve.result.BuildableComponentIdResolveResult;
 import org.gradle.internal.resolve.result.BuildableComponentResolveResult;
-import org.gradle.internal.service.ServiceRegistry;
-import org.gradle.util.CollectionUtils;
 
 import java.io.File;
-import java.util.List;
 import java.util.Set;
 
 public class CompositeProjectDependencyResolver implements ComponentMetaDataResolver, DependencyToComponentIdResolver, ArtifactResolver {
     private final CompositeProjectComponentRegistry controller;
 
-    public CompositeProjectDependencyResolver(ServiceRegistry registry) {
-        List<CompositeProjectComponentRegistry> controllers = registry.getAll(CompositeProjectComponentRegistry.class);
-        this.controller = CollectionUtils.findSingle(controllers);
+    public CompositeProjectDependencyResolver(CompositeProjectComponentRegistry controller) {
+        this.controller = controller;
     }
 
     public void resolve(DependencyMetaData dependency, BuildableComponentIdResolveResult result) {

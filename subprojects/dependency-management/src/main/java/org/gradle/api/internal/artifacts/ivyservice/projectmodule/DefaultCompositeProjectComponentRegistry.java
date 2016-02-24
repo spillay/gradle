@@ -48,7 +48,6 @@ import org.gradle.internal.component.local.model.DefaultCompositeProjectComponen
 import org.gradle.internal.component.local.model.DefaultLocalComponentMetaData;
 import org.gradle.internal.component.local.model.LocalComponentMetaData;
 import org.gradle.internal.component.model.DependencyMetaData;
-import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.util.CollectionUtils;
 
 import java.io.File;
@@ -63,10 +62,10 @@ public class DefaultCompositeProjectComponentRegistry implements CompositeProjec
     private final Map<String, LocalComponentMetaData> cachedMetadata = Maps.newHashMap();
     private final Map<String, GradleLauncher> cachedLaunchers = Maps.newHashMap();
 
-    public DefaultCompositeProjectComponentRegistry(ServiceRegistry registry) {
-        this.context = CollectionUtils.findSingle(registry.getAll(CompositeBuildContext.class));
-        this.gradleLauncherFactory = registry.get(GradleLauncherFactory.class);
-        this.startParameter = registry.get(StartParameter.class);
+    public DefaultCompositeProjectComponentRegistry(CompositeBuildContext context, GradleLauncherFactory gradleLauncherFactory, StartParameter startParameter) {
+        this.context = context;
+        this.gradleLauncherFactory = gradleLauncherFactory;
+        this.startParameter = startParameter;
     }
 
     @Override
@@ -88,10 +87,7 @@ public class DefaultCompositeProjectComponentRegistry implements CompositeProjec
         return localComponentMetaData;
     }
 
-    // TODO:DAZ Make this work for a producer multiproject: that means configuring the multiproject build _once_,
-    // and executing tasks multiple times? (This won't work: can only execute once per configuration)
-
-    // Options:
+    // Options: (Currently implemented 1)
     // 1. Configure each root (for coordinates) and each subproject build independently (for metadata + task execution)
     // 2. Configure each root project build once fully (to calculate coordinates). Reuse this for the first subsequent configure of a subproject.
     // 3. Configure root project once only, and collect the different things that might need to be built: build one, build all
