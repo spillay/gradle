@@ -21,15 +21,18 @@ import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeBuild
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.CompositeProjectComponentRegistry;
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.DefaultCompositeProjectComponentRegistry;
 import org.gradle.initialization.GradleLauncherFactory;
+import org.gradle.internal.service.ServiceRegistry;
 
 public class CompositeScopeServices {
     private final StartParameter startParameter;
+    private final ServiceRegistry serviceRegistry;
 
-    public CompositeScopeServices(StartParameter startParameter) {
+    public CompositeScopeServices(StartParameter startParameter, ServiceRegistry compositeServices) {
         this.startParameter = startParameter;
+        this.serviceRegistry = compositeServices;
     }
 
     public CompositeProjectComponentRegistry createCompositeComponentRegistry(CompositeBuildContext context, GradleLauncherFactory gradleLauncherFactory) {
-        return new DefaultCompositeProjectComponentRegistry(context, gradleLauncherFactory, startParameter);
+        return new DefaultCompositeProjectComponentRegistry(context, gradleLauncherFactory, startParameter, serviceRegistry);
     }
 }
