@@ -26,15 +26,26 @@ import org.gradle.api.internal.initialization.ScriptHandlerFactory
 import org.gradle.api.internal.initialization.ScriptHandlerInternal
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.internal.project.ProjectScript
-import org.gradle.groovy.scripts.*
+import org.gradle.groovy.scripts.BasicScript
+import org.gradle.groovy.scripts.DefaultScript
+import org.gradle.groovy.scripts.ScriptCompiler
+import org.gradle.groovy.scripts.ScriptCompilerFactory
+import org.gradle.groovy.scripts.ScriptRunner
+import org.gradle.groovy.scripts.ScriptSource
 import org.gradle.groovy.scripts.internal.BuildScriptData
 import org.gradle.groovy.scripts.internal.FactoryBackedCompileOperation
 import org.gradle.internal.Factory
+import org.gradle.internal.classloader.ClassPathSnapshot
+import org.gradle.internal.classloader.ClassPathSnapshotter
+import org.gradle.internal.classpath.ClassPath
+import org.gradle.internal.logging.LoggingManagerInternal
 import org.gradle.internal.reflect.Instantiator
 import org.gradle.internal.service.ServiceRegistry
-import org.gradle.logging.LoggingManagerInternal
 import org.gradle.model.internal.inspect.ModelRuleSourceDetector
+import org.gradle.plugin.repository.internal.PluginRepositoryFactory
+import org.gradle.plugin.repository.internal.PluginRepositoryRegistry
 import org.gradle.plugin.use.internal.PluginRequestApplicator
+import org.gradle.plugin.use.internal.PluginRequests
 import spock.lang.Specification
 
 public class DefaultScriptPluginFactoryTest extends Specification {
@@ -58,17 +69,27 @@ public class DefaultScriptPluginFactoryTest extends Specification {
     def fileLookup = Mock(FileLookup)
     def directoryFileTreeFactory = Mock(DirectoryFileTreeFactory)
     def documentationRegistry = Mock(DocumentationRegistry)
+    def classPathSnapshotter = Mock(ClassPathSnapshotter)
+    def pluginRepositoryRegistry = Mock(PluginRepositoryRegistry)
+    def pluginRepositoryFactory = Mock(PluginRepositoryFactory)
 
     def factory = new DefaultScriptPluginFactory(scriptCompilerFactory, loggingManagerFactory, instantiator, scriptHandlerFactory, pluginRequestApplicator, fileLookup,
-            directoryFileTreeFactory, documentationRegistry, new ModelRuleSourceDetector())
+        directoryFileTreeFactory, documentationRegistry, new ModelRuleSourceDetector(), pluginRepositoryRegistry, pluginRepositoryFactory)
 
     def setup() {
         def configurations = Mock(ConfigurationContainer)
         scriptHandler.configurations >> configurations
+        scriptHandler.scriptClassPath >> Mock(ClassPath)
+        classPathScriptRunner.data >> Mock(PluginRequests) {
+            isEmpty() >> true
+        }
         def configuration = Mock(Configuration)
         configurations.getByName(ScriptHandler.CLASSPATH_CONFIGURATION) >> configuration
         configuration.getFiles() >> Collections.emptySet()
         baseScope.getExportClassLoader() >> baseChildClassLoader
+        def snapshot = Mock(ClassPathSnapshot)
+        classPathSnapshotter.snapshot(_) >> snapshot
+        snapshot.hashCode() >> 123
 
         1 * targetScope.getLocalClassLoader() >> scopeClassLoader
     }

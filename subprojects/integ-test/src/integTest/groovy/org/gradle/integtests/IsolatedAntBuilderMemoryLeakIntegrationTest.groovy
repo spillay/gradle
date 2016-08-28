@@ -18,7 +18,6 @@ package org.gradle.integtests
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.test.fixtures.file.TestFile
-import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
 import spock.lang.Unroll
 
@@ -95,16 +94,20 @@ class IsolatedAntBuilderMemoryLeakIntegrationTest extends AbstractIntegrationSpe
         succeeds 'check'
 
         where:
-        groovyVersion << [
+        groovyVersion << (TestPrecondition.JDK9_OR_LATER.fulfilled ? [
+            'localGroovy()',
+            "'org.codehaus.groovy:groovy-all:2.4.7'"
+        ] : [
             'localGroovy()',
             "'org.codehaus.groovy:groovy-all:2.3.10'",
             "'org.codehaus.groovy:groovy-all:2.2.1'",
             "'org.codehaus.groovy:groovy-all:2.1.9'",
             "'org.codehaus.groovy:groovy-all:2.0.4'",
-            "'org.codehaus.groovy:groovy-all:1.8.7'"] * 3
+            "'org.codehaus.groovy:groovy-all:1.8.7'"
+        ]) * 3
     }
 
-    @Unroll @Requires(TestPrecondition.JDK7_OR_LATER)
+    @Unroll
     void "Doesn't fail with a PermGen space error or a missing method exception"() {
         given:
         buildFile << '''

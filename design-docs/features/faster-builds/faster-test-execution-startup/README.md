@@ -13,6 +13,9 @@ Investigate and improve test execution startup time.
 
 - Fix hotspots identified by profiling
 - Investigate file scanning done by the `Test` task. Initial observations have this task scanning its inputs many times. Investigate and fix.
+- Don't attach source directories to `Test` task, when not required.
+- Fix `Test` task inputs so that candidate class files hash is not required.
+- Fix file snapshot calculation to handle directories that are declared as multiple inputs or outputs for a task.
 
 ## Stories
 
@@ -54,7 +57,7 @@ Note: this goal for this story is only to understand the behaviour, not to fix a
 
 The following directories are scanned in the up-to-date check for `test`:
 
-- `build/classes/test` is scanned 4 times : one reason for this is that output snapshots resolve the same file collection twice, once when calling `getFiles` and then when creating the snapshot.
+- `build/classes/test` is scanned 4 times
 - `build/classes/main` is scanned once
 - `src/test/java` is scanned once
 
@@ -78,6 +81,57 @@ Change progress reporting to indicate when Gradle _starts_ running tests. Curren
 This doesn't make test execution faster, makes for a fairer subjective comparison between Gradle and Maven.
 
 Add some basic test coverage for test progress logging. Use the progress logging test fixture.
+
+### Spike generating the HTML and XML reports in parallel
+
+Spike generating the HTML reports at the same time as the XML reports.
+
+The idea is to try running `Binary2JUnitXmlReportGenerator.generate()` in one thread and `TestReporter.generateReport()` in another. It is not to attempt to generate each
+HTML or XML report output file in parallel (though this could be another spike).
+
+### Generate test reports concurrently
+
+Refactor the worker thread pool used by native compilation so that the `Test` task can reuse it to generate the HTML and XML report files in parallel, subject to
+max parallel workers constraints.
+
+Do something useful with exceptions collected during generation.
+
+#### Implementation
+This should reuse the `BuildOperationQueue` used by native compilation.  `BuildOperationQueue` should be modified so that it
+better deals with failure in the thread that is generating the build operations.  Currently, this thread (the main task thread)
+1. creates the queue, then 2. iterates over some stuff and adds operations to the queue, then 3. finally waits for completion.
+The problem is when #2 fails with an exception after having queued some stuff up - these operations will continue to run, even
+though the main task thread has finished running the task and is off doing something else.  When a failure occurs while generating
+build operations, we should instead discard any queued operations and block until the currently running operations are finished,
+then propagate the failure (and any build operations failures too).
+
+Instead of `BuildOperationProcessor.newQueue(worker, …)` that returns a queue that you mess with, we might have
+`BuildOperationProcessor.run(BuildOperationWorker<T> worker, Action<BuildOperationQueue<T>> generator)` that would create the
+queue, run the generator to populate the queue, wait for the result and clean up on failure.
+
+(when `T` is `Runnable` we can leave out the `worker` - we would just run the operations)
+
+#### Some Results
+The following are running `gradle cleanTest test`.  For each data point, there were a couple of warm-up runs, followed by several runs whose results were averaged together.
+All times are in seconds.
+
+The single10000/25000/50000 test sets are single project builds with 10000, 25000, and 50000 tests.
+
+Test Report Generation time - this is a measure of the total time spent generating test reports.
+
+Branch | mediumWithJUnit | largeWithJUnit | single10000 | single25000 | single50000
+------ | --------------- | -------------- | ----------- | ----------- | -----------
+Mar 21 snapshot | 3.16 | 9.00 | 5.81 | 8.30 | 17.83
+Mar 23 master | 1.11 | 3.11 | 2.10 | 6.21 | 8.40
+**Difference** | -2.05 | -5.89 | -3.61 | -2.09 | -9.43
+
+Total Build Time
+
+Branch | mediumWithJUnit | largeWithJUnit | single10000 | single25000 | single50000
+------ | --------------- | -------------- | ----------- | ----------- | -----------
+Mar 21 snapshot | 46.33 | 118.45 | 15.92 | 28.18 | 55.86
+Mar 23 master | 43.55 | 112.32 | 11.77 | 25.30 | 48.82
+**Difference** | -2.78 | -6.13 | -4.15 | -2.88 | -7.04
 
 ### Understand where test task is spending its time
 
@@ -123,7 +177,7 @@ A typical breakdown of the wall clock time spent by `test` with 1000 main and te
 
 Miscellaneous profiling results:
 
-- when excluding test execution time, up to 10% of remaning time is spent calling `getGenericReturnType` in decorators (fixed already)
+- When excluding test execution time, up to 10% of remaining time is spent calling `getGenericReturnType` in decorators (fixed already)
 - A large number of empty snapshots are generated when tasks are up-to-date. This could be optimized for memory and iteration. Experimental fix: https://github.com/gradle/gradle/commit/9946a56f225aa9f4007eb65f0cfb3274a718e140
 - 20% of dependency resolution time in up-to-date build is spent in parsing the Ivy XML descriptor
 - IDE plugin application consumes most of the build script (project) setup. The Eclipse and IDEA plugins trigger a lot of dynamic variable resolution (`conventionMapping`, `projectModel`, ...) which are very expensive (and not optimized) in Groovy. This is called even if, in the end, we will never call the IDEA or Eclipse tasks...

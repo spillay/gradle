@@ -16,6 +16,7 @@
 package org.gradle.play.plugins;
 
 import org.gradle.api.*;
+import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.internal.artifacts.publish.DefaultPublishArtifact;
 import org.gradle.api.internal.file.FileResolver;
@@ -93,6 +94,11 @@ public class PlayApplicationPlugin implements Plugin<Project> {
             return serviceRegistry.get(FileResolver.class);
         }
 
+        @Hidden @Model
+        ConfigurationContainer configurationContainer(ServiceRegistry serviceRegistry) {
+            return serviceRegistry.get(ConfigurationContainer.class);
+        }
+
         @ComponentType
         void registerPlayPlatformAwareComponentSpecType(TypeBuilder<PlayPlatformAwareComponentSpec> builder) {
             builder.defaultImplementation(DefaultPlayPlatformAwareComponentSpec.class);
@@ -162,8 +168,8 @@ public class PlayApplicationPlugin implements Plugin<Project> {
                     playBinaryInternal.setTargetPlatform(chosenPlatform);
                     playBinaryInternal.setToolChain(playToolChainInternal);
 
-                    File mainJar = new File(binaryBuildDir, String.format("lib/%s.jar", projectIdentifier.getName()));
-                    File assetsJar = new File(binaryBuildDir, String.format("lib/%s-assets.jar", projectIdentifier.getName()));
+                    File mainJar = new File(binaryBuildDir, "lib/" + projectIdentifier.getName() + ".jar");
+                    File assetsJar = new File(binaryBuildDir, "lib/" + projectIdentifier.getName() + "-assets.jar");
                     playBinaryInternal.setJarFile(mainJar);
                     playBinaryInternal.setAssetsJarFile(assetsJar);
 
@@ -205,7 +211,7 @@ public class PlayApplicationPlugin implements Plugin<Project> {
 
         private PlatformRequirement getTargetPlatform(PlayApplicationSpecInternal playApplicationSpec) {
             if (playApplicationSpec.getTargetPlatforms().isEmpty()) {
-                String defaultPlayPlatform = String.format("play-%s", DefaultPlayPlatform.DEFAULT_PLAY_VERSION);
+                String defaultPlayPlatform = "play-" + DefaultPlayPlatform.DEFAULT_PLAY_VERSION;
                 return DefaultPlatformRequirement.create(defaultPlayPlatform);
             }
             return playApplicationSpec.getTargetPlatforms().get(0);

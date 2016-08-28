@@ -17,8 +17,8 @@
 package org.gradle.api.plugins
 
 import org.gradle.api.JavaVersion
+import org.gradle.api.Project
 import org.gradle.api.internal.file.FileResolver
-import org.gradle.api.internal.project.DefaultProject
 import org.gradle.api.internal.tasks.DefaultSourceSetContainer
 import org.gradle.api.java.archives.internal.DefaultManifest
 import org.gradle.internal.reflect.Instantiator
@@ -30,18 +30,18 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
-import static org.hamcrest.Matchers.*
+import static org.hamcrest.Matchers.equalTo
+import static org.hamcrest.Matchers.instanceOf
 import static org.junit.Assert.assertEquals
 import static org.junit.Assert.assertThat
 
 class JavaPluginConventionTest {
     private final JUnit4GroovyMockery context = new JUnit4GroovyMockery()
-    private DefaultProject project = TestUtil.createRootProject()
+    @Rule
+    public TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider()
+    private final Project project = TestUtil.create(tmpDir).rootProject()
     private Instantiator instantiator = project.services.get(Instantiator)
     private JavaPluginConvention convention
-
-    @Rule
-    public final TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider()
 
     @Before public void setUp() {
         project.pluginManager.apply(ReportingBasePlugin)
@@ -71,7 +71,7 @@ class JavaPluginConventionTest {
         }
         assertThat(convention.sourceSets.main.output.classesDir, equalTo(project.file(dir)))
     }
-    
+
     @Test public void testDefaultDirs() {
         checkDirs()
     }

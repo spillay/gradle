@@ -16,6 +16,7 @@
 package org.gradle.api.java.archives;
 
 import groovy.lang.Closure;
+import org.gradle.internal.HasInternalProtocol;
 
 import java.io.Writer;
 import java.util.Map;
@@ -23,6 +24,7 @@ import java.util.Map;
 /**
  * Represents the manifest file of a JAR file.
  */
+@HasInternalProtocol
 public interface Manifest {
     /**
      * Returns the main attributes of the manifest.
@@ -41,7 +43,7 @@ public interface Manifest {
      *
      * @param attributes The values to add to the main attributes. The values can be any object. For evaluating the value objects
      * their {@link Object#toString()} method is used. This is done lazily either before writing or when {@link #getEffectiveManifest()}
-     * is called. 
+     * is called.
      *
      * @return this
      * @throws ManifestException If a key is invalid according to the manifest spec or if a key or value is null.
@@ -50,7 +52,7 @@ public interface Manifest {
 
     /**
      * Adds content to the given section of the manifest.
-     * 
+     *
      * @param attributes The values to add to the section. The values can be any object. For evaluating the value objects
      * their {@link Object#toString()} method is used. This is done lazily either before writing or when {@link #getEffectiveManifest()}
      * is called.
@@ -70,13 +72,22 @@ public interface Manifest {
     /**
      * Writes the manifest into a writer.
      *
+     * If writing to bytes, prefer using the UTF-8 character set for encoding.
+     *
+     * Note that using this method will break your Manifest if it contains long
+     * attribute names or values that may produce split multi-bytes characters.
+     * Prefer {@link #writeTo(Object)} instead.
+     *
      * @param writer The writer to write the manifest to
      * @return this
      */
+    @Deprecated
     Manifest writeTo(Writer writer);
 
     /**
      * Writes the manifest into a file. The path's are resolved as defined by {@link org.gradle.api.Project#files(Object...)}
+     *
+     * The manifest will be encoded using the character set defined by the {@link org.gradle.jvm.tasks.Jar#getManifestContentCharset()} property.
      *
      * @param path The path of the file to write the manifest into.
      * @return this

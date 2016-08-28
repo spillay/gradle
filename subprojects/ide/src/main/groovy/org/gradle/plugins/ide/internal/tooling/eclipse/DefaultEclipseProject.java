@@ -18,6 +18,7 @@ package org.gradle.plugins.ide.internal.tooling.eclipse;
 import com.google.common.collect.Lists;
 import org.gradle.tooling.internal.gradle.DefaultGradleProject;
 import org.gradle.tooling.internal.gradle.GradleProjectIdentity;
+import org.gradle.tooling.internal.protocol.eclipse.DefaultEclipseProjectIdentifier;
 
 import java.io.File;
 import java.io.Serializable;
@@ -28,6 +29,7 @@ import java.util.List;
  * An implementation for {@link org.gradle.tooling.model.eclipse.EclipseProject}.
  */
 public class DefaultEclipseProject implements Serializable, GradleProjectIdentity {
+    private final DefaultEclipseProjectIdentifier identifier;
     private final String name;
     private final String path;
     private DefaultEclipseProject parent;
@@ -43,8 +45,11 @@ public class DefaultEclipseProject implements Serializable, GradleProjectIdentit
     private List<DefaultEclipseProjectNature> projectNatures;
     private List<DefaultEclipseBuildCommand> buildCommands;
     private DefaultEclipseJavaSourceSettings javaSourceSettings;
+    private List<DefaultEclipseClasspathContainer> classpathContainers;
+    private DefaultEclipseOutputLocation outputLocation;
 
     public DefaultEclipseProject(String name, String path, String description, File projectDirectory, Iterable<? extends DefaultEclipseProject> children) {
+        this.identifier = new DefaultEclipseProjectIdentifier(projectDirectory);
         this.name = name;
         this.path = path;
         this.description = description;
@@ -56,13 +61,19 @@ public class DefaultEclipseProject implements Serializable, GradleProjectIdentit
         this.projectDependencies = Collections.emptyList();
         this.projectNatures = Collections.emptyList();
         this.buildCommands = Collections.emptyList();
+        this.classpathContainers = Collections.emptyList();
     }
 
     @Override
     public String toString() {
-        return String.format("project '%s'", path);
+        return "project '" + path + "'";
     }
 
+    public DefaultEclipseProjectIdentifier getIdentifier() {
+        return identifier;
+    }
+
+    @Override
     public String getPath() {
         return path;
     }
@@ -162,5 +173,21 @@ public class DefaultEclipseProject implements Serializable, GradleProjectIdentit
 
     public void setJavaSourceSettings(DefaultEclipseJavaSourceSettings javaSourceSettings) {
         this.javaSourceSettings = javaSourceSettings;
+    }
+
+    public List<DefaultEclipseClasspathContainer> getClasspathContainers() {
+        return classpathContainers;
+    }
+
+    public void setClasspathContainers(List<DefaultEclipseClasspathContainer> classpathContainers) {
+        this.classpathContainers = classpathContainers;
+    }
+
+    public DefaultEclipseOutputLocation getOutputLocation() {
+        return outputLocation;
+    }
+
+    public void setOutputLocation(DefaultEclipseOutputLocation outputLocation) {
+        this.outputLocation = outputLocation;
     }
 }

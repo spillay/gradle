@@ -16,19 +16,26 @@
 
 package org.gradle.plugins.ide.idea.model.internal;
 
-import org.gradle.api.Project;
-import org.gradle.plugins.ide.idea.IdeaPlugin;
-import org.gradle.plugins.ide.idea.model.IdeaModel;
+import org.gradle.api.internal.composite.CompositeBuildIdeProjectResolver;
+import org.gradle.internal.component.model.ComponentArtifactMetadata;
 import org.gradle.plugins.ide.idea.model.ModuleDependency;
 import org.gradle.plugins.ide.internal.resolver.model.IdeProjectDependency;
 
 class ModuleDependencyBuilder {
+    private final CompositeBuildIdeProjectResolver ideProjectResolver;
+
+    public ModuleDependencyBuilder(CompositeBuildIdeProjectResolver ideProjectResolver) {
+        this.ideProjectResolver = ideProjectResolver;
+    }
+
     public ModuleDependency create(IdeProjectDependency dependency, String scope) {
-        Project project = dependency.getProject();
-        if (project.getPlugins().hasPlugin(IdeaPlugin.class)) {
-            return new ModuleDependency(((IdeaModel) project.getExtensions().getByName("idea")).getModule().getName(), scope);
-        } else {
-            return new ModuleDependency(project.getName(), scope);
-        }
+        ModuleDependency moduleDependency = new ModuleDependency(determineProjectName(dependency), scope);
+        moduleDependency.setGradlePath(dependency.getProjectPath());
+        return moduleDependency;
+    }
+
+    private String determineProjectName(IdeProjectDependency dependency) {
+        ComponentArtifactMetadata imlArtifact = ideProjectResolver.resolveArtifact(dependency.getProjectId(), "iml");
+        return imlArtifact == null ? dependency.getProjectName() : imlArtifact.getName().getName();
     }
 }

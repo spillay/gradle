@@ -38,7 +38,6 @@ import org.gradle.play.internal.PlayApplicationBinarySpecInternal;
 import org.gradle.play.internal.toolchain.PlayToolProvider;
 
 import java.io.File;
-import java.util.Arrays;
 
 /**
  * Plugin for executing tests from a Play Framework application.
@@ -56,7 +55,7 @@ public class PlayTestPlugin extends RuleSource {
             final String testCompileTaskName = binary.getTasks().taskName("compile", "tests");
             final File testSourceDir = fileResolver.resolve("test");
             final FileCollection testSources = new SimpleFileCollection(testSourceDir).getAsFileTree().matching(new PatternSet().include("**/*.scala", "**/*.java"));
-            final File testClassesDir = new File(buildDir, String.format("%s/testClasses", binary.getProjectScopedName()));
+            final File testClassesDir = new File(buildDir, binary.getProjectScopedName() + "/testClasses");
             tasks.create(testCompileTaskName, PlatformScalaCompile.class, new Action<PlatformScalaCompile>() {
                 public void execute(PlatformScalaCompile scalaCompile) {
                     scalaCompile.setDescription("Compiles the scala and java test sources for the " + binary.getDisplayName() + ".");
@@ -72,7 +71,7 @@ public class PlayTestPlugin extends RuleSource {
                     scalaCompile.setTargetCompatibility(targetCompatibility);
 
                     IncrementalCompileOptions incrementalOptions = scalaCompile.getScalaCompileOptions().getIncrementalOptions();
-                    incrementalOptions.setAnalysisFile(new File(buildDir, String.format("tmp/scala/compilerAnalysis/%s.analysis", testCompileTaskName)));
+                    incrementalOptions.setAnalysisFile(new File(buildDir, "tmp/scala/compilerAnalysis/" + testCompileTaskName + ".analysis"));
                 }
             });
 
@@ -80,16 +79,15 @@ public class PlayTestPlugin extends RuleSource {
             final File binaryBuildDir = new File(buildDir, binary.getProjectScopedName());
             tasks.create(testTaskName, Test.class, new Action<Test>() {
                 public void execute(Test test) {
-                    test.setDescription(String.format("Runs %s.", WordUtils.uncapitalize(binary.getDisplayName())));
+                    test.setDescription("Runs " + WordUtils.uncapitalize(binary.getDisplayName() + "."));
 
                     test.setClasspath(getRuntimeClasspath(testClassesDir, testCompileClasspath));
 
                     test.setTestClassesDir(testClassesDir);
-                    test.setBinResultsDir(new File(binaryBuildDir, String.format("results/%s/bin", testTaskName)));
+                    test.setBinResultsDir(new File(binaryBuildDir, "results/" + testTaskName + "/bin"));
                     test.getReports().getJunitXml().setDestination(new File(binaryBuildDir, "reports/test/xml"));
                     test.getReports().getHtml().setDestination(new File(binaryBuildDir, "reports/test"));
                     test.dependsOn(testCompileTaskName);
-                    test.setTestSrcDirs(Arrays.asList(testSourceDir));
                     test.setWorkingDir(projectIdentifier.getProjectDir());
                 }
             });

@@ -51,6 +51,7 @@ public class ZincScalaCompiler implements Compiler<ScalaJavaJointCompileSpec>, S
     private Iterable<File> zincClasspath;
     private final File gradleUserHome;
 
+    public static final String ZINC_CACHE_HOME_DIR_SYSTEM_PROPERTY = "org.gradle.zinc.home.dir";
     private static final String ZINC_DIR_SYSTEM_PROPERTY = "zinc.dir";
     public static final String ZINC_DIR_IGNORED_MESSAGE = "In order to guarantee parallel safe Scala compilation, Gradle does not support the '" + ZINC_DIR_SYSTEM_PROPERTY + "' system property and ignores any value provided.";
 
@@ -126,7 +127,8 @@ public class ZincScalaCompiler implements Compiler<ScalaJavaJointCompileSpec>, S
         }
 
         static com.typesafe.zinc.Compiler createParallelSafeCompiler(final Iterable<File> scalaClasspath, final Iterable<File> zincClasspath, final xsbti.Logger logger, File gradleUserHome) {
-            CacheRepository cacheRepository = ZincCompilerServices.getInstance(gradleUserHome).get(CacheRepository.class);
+            File zincCacheHomeDir = new File(System.getProperty(ZINC_CACHE_HOME_DIR_SYSTEM_PROPERTY, gradleUserHome.getAbsolutePath()));
+            CacheRepository cacheRepository = ZincCompilerServices.getInstance(zincCacheHomeDir).get(CacheRepository.class);
             final PersistentCache zincCache = cacheRepository.cache("zinc")
                                                             .withDisplayName("Zinc compiler cache")
                                                             .withLockOptions(mode(FileLockManager.LockMode.Exclusive))

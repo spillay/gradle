@@ -20,7 +20,6 @@ import org.gradle.internal.os.OperatingSystem
 import org.gradle.nativeplatform.fixtures.AbstractInstalledToolChainIntegrationSpec
 import org.gradle.nativeplatform.fixtures.RequiresInstalledToolChain
 import org.gradle.nativeplatform.fixtures.app.CHelloWorldApp
-import org.gradle.test.fixtures.file.LeaksFileHandles
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
@@ -28,7 +27,6 @@ import org.gradle.util.TestPrecondition
 import static org.gradle.nativeplatform.fixtures.ToolChainRequirement.GCC_COMPATIBLE
 
 @RequiresInstalledToolChain(GCC_COMPATIBLE)
-@LeaksFileHandles
 class GccToolChainCustomisationIntegrationTest extends AbstractInstalledToolChainIntegrationSpec {
     def helloWorldApp = new CHelloWorldApp()
 
@@ -98,10 +96,10 @@ model {
         succeeds "mainArmExecutable", "mainI386Executable", "mainSparcExecutable"
 
         then:
-        executable("build/exe/main/arm/main").binaryInfo.arch.name == "x86"
+        executable("build/exe/main/arm/main").arch.name == "x86"
         executable("build/exe/main/arm/main").exec().out == helloWorldApp.frenchOutput
 
-        executable("build/exe/main/i386/main").binaryInfo.arch.name == "x86"
+        executable("build/exe/main/i386/main").arch.name == "x86"
         executable("build/exe/main/i386/main").exec().out == helloWorldApp.englishOutput
 
         executable("build/exe/main/sparc/main").exec().out == helloWorldApp.englishOutput

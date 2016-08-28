@@ -15,6 +15,7 @@
  */
 package org.gradle.integtests.resolve
 
+import groovy.transform.NotYetImplemented
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.FluidDependenciesResolveRunner
 import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
@@ -26,8 +27,8 @@ import spock.lang.Issue
 class ProjectDependencyResolveIntegrationTest extends AbstractIntegrationSpec {
     public void "project dependency includes artifacts and transitive dependencies of default configuration in target project"() {
         given:
-        mavenRepo.module("org.other", "externalA", 1.2).publish()
-        mavenRepo.module("org.other", "externalB", 2.1).publish()
+        mavenRepo.module("org.other", "externalA", "1.2").publish()
+        mavenRepo.module("org.other", "externalB", "2.1").publish()
 
         and:
         file('settings.gradle') << "include 'a', 'b'"
@@ -115,7 +116,7 @@ project(":b") {
 
     public void "project dependency that specifies a target configuration includes artifacts and transitive dependencies of selected configuration"() {
         given:
-        mavenRepo.module("org.other", "externalA", 1.2).publish()
+        mavenRepo.module("org.other", "externalA", "1.2").publish()
 
         and:
         file('settings.gradle') << "include 'a', 'b'"
@@ -271,59 +272,9 @@ project(':b') {
         executedAndNotSkipped ":a:configureJar", ":a:aJar"
     }
 
-    /**
-     * When the set of artifacts for a project is changed during task execution, then a project dependency will not be resolved
-     * fully and/or correctly.
-     * - Without fluid dependencies, the artifacts are included in the resolution result, but the tasks to build them are not executed
-     * - With fluid dependencies, the changed artifacts are _not_ included in the resolution result, nor are the tasks.
-     */
-    public void "set of resolved project artifacts can be changed after task graph is resolved"() {
-        given:
-        def fluidDependencies = Boolean.getBoolean(FluidDependenciesResolveRunner.ASSUME_FLUID_DEPENDENCIES)
-        file('settings.gradle') << "include 'a'"
-
-        and:
-        file('a/build.gradle') << '''
-            apply plugin: 'base'
-            configurations { compile }
-            task jar1(type: Jar) {
-                classifier '1'
-            }
-            task jar2(type: Jar) {
-                classifier '2'
-            }
-            artifacts { compile tasks.jar1 }
-            gradle.taskGraph.whenReady {
-                artifacts { compile tasks.jar2 }
-            }
-'''
-        file('build.gradle') << """
-            configurations { compile }
-            dependencies { compile project(path: ':a', configuration: 'compile') }
-            task test(dependsOn: configurations.compile) << {
-                assert configurations.compile.collect { it.name } == ${fluidDependencies ? "['a-1.jar']" : "['a-1.jar', 'a-2.jar']"}
-            }
-"""
-
-        when:
-        if (fluidDependencies) {
-            executer.withDeprecationChecksDisabled()
-        }
-        succeeds ":test"
-
-        then:
-        // The added artifact is never added as a task
-        executedAndNotSkipped ":a:jar1" // Should include ":a:jar2" when no fluidDependencies
-
-        and:
-        if (fluidDependencies) {
-            output.contains "Changed artifacts of configuration ':a:compile' after it has been included in dependency resolution"
-        }
-    }
-
     public void "project dependency that references an artifact includes the matching artifact only plus the transitive dependencies of referenced configuration"() {
         given:
-        mavenRepo.module("group", "externalA", 1.5).publish()
+        mavenRepo.module("group", "externalA", "1.5").publish()
 
         and:
         file('settings.gradle') << "include 'a', 'b'"
@@ -396,7 +347,7 @@ project(":b") {
 
     public void "non-transitive project dependency includes only the artifacts of the target configuration"() {
         given:
-        mavenRepo.module("group", "externalA", 1.5).publish()
+        mavenRepo.module("group", "externalA", "1.5").publish()
 
         and:
         file('settings.gradle') << "include 'a', 'b'"
@@ -492,6 +443,53 @@ project('c') {
         executedAndNotSkipped ":b:jar", ":c:jar"
     }
 
+    @NotYetImplemented
+    @Issue('GRADLE-3280')
+    def "can resolve recursive copy of configuration with cyclic project dependencies"() {
+        given:
+        settingsFile << "include 'a', 'b', 'c'"
+        buildScript '''
+            subprojects {
+                apply plugin: 'base'
+                task jar(type: Jar)
+                artifacts {
+                    'default' jar
+                }
+            }
+            project('a') {
+                dependencies {
+                    'default' project(':b')
+                }
+                task assertCanResolve {
+                    doLast {
+                        assert !project.configurations.default.resolvedConfiguration.hasError()
+                    }
+                }
+                task assertCanResolveRecursiveCopy {
+                    doLast {
+                        assert !project.configurations.default.copyRecursive().resolvedConfiguration.hasError()
+                    }
+                }
+            }
+            project('b') {
+                dependencies {
+                    'default' project(':c')
+                }
+            }
+            project('c') {
+                dependencies {
+                    'default' project(':a')
+                }
+            }
+        '''.stripIndent()
+
+        expect:
+        succeeds ':a:assertCanResolve'
+
+        and:
+        succeeds ':a:assertCanResolveRecursiveCopy'
+    }
+
     // this test is largely covered by other tests, but does ensure that there is nothing special about
     // project dependencies that are “built” by built in plugins like the Java plugin's created jars
     @IgnoreIf({GradleContextualExecuter.parallel})
@@ -566,15 +564,13 @@ project('c') {
 """
 
         when:
-        executer.withDeprecationChecksDisabled()
-        succeeds("impl:check")
+        fails("impl:check")
 
         then:
-        output.contains "Changed dependencies of configuration ':api:conf' after it has been included in dependency resolution"
+        failure.assertHasCause "Cannot change dependencies of configuration ':api:conf' after it has been included in dependency resolution"
     }
 
-    @Issue("GRADLE-3330")
-    @Issue("GRADLE-3362")
+    @Issue(["GRADLE-3330", "GRADLE-3362"])
     public void "project dependency can resolve multiple artifacts from target project that are differentiated by archiveName only"() {
         given:
         file('settings.gradle') << "include 'a', 'b'"

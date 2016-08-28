@@ -29,26 +29,45 @@ import org.gradle.api.Transformer;
 import org.gradle.internal.Cast;
 import org.gradle.internal.Factory;
 import org.gradle.internal.UncheckedException;
+import org.gradle.internal.reflect.GroovyMethods;
 import org.gradle.model.InvalidModelRuleDeclarationException;
 import org.gradle.model.RuleInput;
 import org.gradle.model.RuleSource;
 import org.gradle.model.RuleTarget;
-import org.gradle.model.internal.core.*;
+import org.gradle.model.internal.core.ModelAction;
+import org.gradle.model.internal.core.ModelPath;
+import org.gradle.model.internal.core.ModelReference;
+import org.gradle.model.internal.core.ModelView;
+import org.gradle.model.internal.core.MutableModelNode;
 import org.gradle.model.internal.core.rule.describe.ModelRuleDescriptor;
 import org.gradle.model.internal.manage.binding.StructBindings;
 import org.gradle.model.internal.manage.binding.StructBindingsStore;
 import org.gradle.model.internal.manage.instance.GeneratedViewState;
 import org.gradle.model.internal.manage.instance.ManagedInstance;
 import org.gradle.model.internal.manage.instance.ManagedProxyFactory;
-import org.gradle.model.internal.manage.schema.*;
-import org.gradle.model.internal.manage.schema.extract.ModelSchemaUtils;
+import org.gradle.model.internal.manage.schema.ModelProperty;
+import org.gradle.model.internal.manage.schema.ModelSchema;
+import org.gradle.model.internal.manage.schema.ModelSchemaStore;
+import org.gradle.model.internal.manage.schema.ScalarValueSchema;
+import org.gradle.model.internal.manage.schema.StructSchema;
 import org.gradle.model.internal.method.WeaklyTypeReferencingMethod;
 import org.gradle.model.internal.registry.ModelRegistry;
+import org.gradle.model.internal.registry.RuleContext;
 import org.gradle.model.internal.type.ModelType;
 import org.gradle.util.CollectionUtils;
 
-import java.lang.reflect.*;
-import java.util.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 
 @ThreadSafe
@@ -244,16 +263,16 @@ public class ModelRuleExtractor {
             }
             if (reference.getPath() != null) {
                 try {
-                    ModelPath.validatePath(reference.getPath().toString());
+                    ModelPath.validatePath(reference.getPath().getPath());
                 } catch (Exception e) {
-                    problems.add(ruleDefinition, "The declared model element path '" + reference.getPath() + "' used for parameter " + (i + 1) + " is not a valid path", e);
+                    problems.add(ruleDefinition, "The declared model element path '" + reference.getPath().getPath() + "' used for parameter " + (i + 1) + " is not a valid path", e);
                 }
             }
         }
     }
 
     private void validateNonRuleMethod(Method method, RuleSourceValidationProblemCollector problems) {
-        if (!Modifier.isPrivate(method.getModifiers()) && !Modifier.isStatic(method.getModifiers()) && !method.isSynthetic() && !ModelSchemaUtils.isObjectMethod(method)) {
+        if (!Modifier.isPrivate(method.getModifiers()) && !Modifier.isStatic(method.getModifiers()) && !method.isSynthetic() && !GroovyMethods.isObjectMethod(method)) {
             problems.add(method, "A method that is not annotated as a rule must be private");
         }
     }
@@ -401,29 +420,9 @@ public class ModelRuleExtractor {
                         final List<ModelReference<?>> inputs = withImplicitInputs(action.getInputs());
                         final ModelReference<?> mappedSubject = mapSubject(action.getSubject(), targetPath);
                         mapInputs(inputs.subList(0, action.getInputs().size()), targetPath);
-                        return new ModelAction() {
-                            @Override
-                            public ModelRuleDescriptor getDescriptor() {
-                                return details.method.getDescriptor();
-                            }
-
-                            @Override
-                            public ModelReference<?> getSubject() {
-                                return mappedSubject;
-                            }
-
-                            @Override
-                            public List<? extends ModelReference<?>> getInputs() {
-                                return inputs;
-                            }
-
-                            @Override
-                            public void execute(MutableModelNode modelNode, List<ModelView<?>> inputs) {
-                                WeaklyTypeReferencingMethod<Object, Object> method = Cast.uncheckedCast(details.method.getMethod());
-                                ModelRuleInvoker<Object> invoker = new DefaultModelRuleInvoker<Object, Object>(method, getFactory());
-                                action.execute(invoker, modelNode, inputs.subList(0, action.getInputs().size()));
-                            }
-                        };
+                        final MethodRuleDefinition<?, ?> methodRuleDefinition = details.method;
+                        final Factory<? extends T> factory = getFactory();
+                        return new ContextualizedModelAction<T>(methodRuleDefinition, mappedSubject, inputs, action, factory);
                     }
                 }, target);
             }
@@ -478,6 +477,44 @@ public class ModelRuleExtractor {
                 }
             }
         }
+
+        private static class ContextualizedModelAction<T> implements ModelAction {
+            private final MethodRuleDefinition<?, ?> methodRuleDefinition;
+            private final ModelReference<?> mappedSubject;
+            private final List<ModelReference<?>> inputs;
+            private final MethodRuleAction action;
+            private final Factory<? extends T> factory;
+
+            public ContextualizedModelAction(MethodRuleDefinition<?, ?> methodRuleDefinition, ModelReference<?> mappedSubject, List<ModelReference<?>> inputs, MethodRuleAction action, Factory<? extends T> factory) {
+                this.methodRuleDefinition = methodRuleDefinition;
+                this.mappedSubject = mappedSubject;
+                this.inputs = inputs;
+                this.action = action;
+                this.factory = factory;
+            }
+
+            @Override
+            public ModelRuleDescriptor getDescriptor() {
+                return methodRuleDefinition.getDescriptor();
+            }
+
+            @Override
+            public ModelReference<?> getSubject() {
+                return mappedSubject;
+            }
+
+            @Override
+            public List<? extends ModelReference<?>> getInputs() {
+                return inputs;
+            }
+
+            @Override
+            public void execute(MutableModelNode modelNode, List<ModelView<?>> inputs) {
+                WeaklyTypeReferencingMethod<Object, Object> method = Cast.uncheckedCast(methodRuleDefinition.getMethod());
+                ModelRuleInvoker<Object> invoker = new DefaultModelRuleInvoker<Object, Object>(method, factory);
+                action.execute(invoker, modelNode, inputs.subList(0, action.getInputs().size()));
+            }
+        }
     }
 
     private static class StatelessExtractedRuleSource<T> extends DefaultExtractedRuleSource<T> {
@@ -529,18 +566,33 @@ public class ModelRuleExtractor {
 
         @Override
         public Object get(String name) {
-            return values.get(name);
+            ModelProperty<?> property = schema.getProperty(name);
+            if (property.getSchema() instanceof ScalarValueSchema) {
+                return values.get(name);
+            }
+
+            MutableModelNode node = (MutableModelNode) values.get(name);
+            if (node == null) {
+                return null;
+            }
+            return node.asImmutable(property.getType(), RuleContext.get()).getInstance();
         }
 
         @Override
         public void set(String name, Object value) {
-            values.put(name, value);
+            ModelProperty<?> property = schema.getProperty(name);
+            if (property.getSchema() instanceof ScalarValueSchema) {
+                values.put(name, value);
+            } else {
+                MutableModelNode backingNode = ((ManagedInstance) value).getBackingNode();
+                values.put(name, backingNode);
+            }
         }
 
         @Override
         protected ModelPath calculateTarget(MutableModelNode target) {
             if (targetProperty != null) {
-                return ((ManagedInstance) values.get(targetProperty.getName())).getBackingNode().getPath();
+                return ((MutableModelNode)values.get(targetProperty.getName())).getPath();
             }
             return target.getPath();
         }
@@ -550,8 +602,8 @@ public class ModelRuleExtractor {
             List<ModelReference<?>> allInputs = new ArrayList<ModelReference<?>>(inputs.size() + implicitInputs.size());
             allInputs.addAll(inputs);
             for (ModelProperty<?> property : implicitInputs) {
-                ManagedInstance value = (ManagedInstance) values.get(property.getName());
-                allInputs.add(ModelReference.of(value.getBackingNode().getPath()));
+                MutableModelNode backingNode = (MutableModelNode) values.get(property.getName());
+                allInputs.add(ModelReference.of(backingNode.getPath()));
             }
             return allInputs;
         }

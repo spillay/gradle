@@ -36,7 +36,7 @@ import org.gradle.nativeplatform.toolchain.internal.msvcpp.VisualStudioInstall;
 import org.gradle.nativeplatform.toolchain.internal.msvcpp.VisualStudioLocator;
 import org.gradle.nativeplatform.toolchain.plugins.ClangCompilerPlugin;
 import org.gradle.nativeplatform.toolchain.plugins.GccCompilerPlugin;
-import org.gradle.nativeplatform.toolchain.plugins.MicrosoftVisualCppPlugin;
+import org.gradle.nativeplatform.toolchain.plugins.MicrosoftVisualCppCompilerPlugin;
 import org.gradle.test.fixtures.file.TestFile;
 import org.gradle.testfixtures.internal.NativeServicesTestFixture;
 import org.gradle.util.CollectionUtils;
@@ -47,7 +47,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import static org.gradle.nativeplatform.fixtures.VisualStudioVersion.*;
+import static org.gradle.nativeplatform.fixtures.VisualStudioVersion.VISUALSTUDIO_2012;
+import static org.gradle.nativeplatform.fixtures.VisualStudioVersion.VISUALSTUDIO_2013;
 
 public class AvailableToolChains {
     private static List<ToolChainCandidate> toolChains;
@@ -129,9 +130,11 @@ public class AvailableToolChains {
         List<ToolChainCandidate> toolChains = Lists.newArrayList();
 
         for (VisualStudioLocator.SearchResult searchResult : searchResults) {
-            VisualStudioInstall install = searchResult.getVisualStudio();
-            if (isTestableVisualStudioVersion(install.getVersion()) && searchResult.isAvailable()) {
-                toolChains.add(new InstalledVisualCpp(getVisualStudioVersion(install.getVersion())).withInstall(install));
+            if (searchResult.isAvailable()) {
+                VisualStudioInstall install = searchResult.getVisualStudio();
+                if (isTestableVisualStudioVersion(install.getVersion())) {
+                    toolChains.add(new InstalledVisualCpp(getVisualStudioVersion(install.getVersion())).withInstall(install));
+                }
             }
         }
 
@@ -464,7 +467,7 @@ public class AvailableToolChains {
 
         @Override
         public String getPluginClass() {
-            return MicrosoftVisualCppPlugin.class.getSimpleName();
+            return MicrosoftVisualCppCompilerPlugin.class.getSimpleName();
         }
 
         public boolean isVisualCpp() {

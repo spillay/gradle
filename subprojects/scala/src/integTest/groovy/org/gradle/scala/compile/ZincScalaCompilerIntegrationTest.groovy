@@ -18,17 +18,11 @@ package org.gradle.scala.compile
 import org.gradle.integtests.fixtures.ScalaCoverage
 import org.gradle.integtests.fixtures.TargetCoverage
 import org.gradle.integtests.fixtures.TestResources
-import org.gradle.test.fixtures.file.LeaksFileHandles
 import org.junit.Rule
 
 @TargetCoverage({ScalaCoverage.DEFAULT})
-@LeaksFileHandles
 class ZincScalaCompilerIntegrationTest extends BasicScalaCompilerIntegrationTest {
     @Rule TestResources testResources = new TestResources(temporaryFolder)
-
-    String compilerConfiguration() {
-        ""
-    }
 
     String logStatement() {
         "Compiling with Zinc Scala compiler"
@@ -45,6 +39,7 @@ class ZincScalaCompilerIntegrationTest extends BasicScalaCompilerIntegrationTest
         file("src/main/scala/Person.scala").delete()
         file("src/main/scala/Person.scala") << "class Person"
         args("-i", "-PscalaVersion=$version") // each run clears args (argh!)
+        executer.expectDeprecationWarning() // each run clears args (argh!)
         run("compileScala")
 
         then:
@@ -67,6 +62,7 @@ class ZincScalaCompilerIntegrationTest extends BasicScalaCompilerIntegrationTest
         file("src/main/scala/Person.java").delete()
         file("src/main/scala/Person.java") << "public class Person {}"
         args("-i", "-PscalaVersion=$version") // each run clears args (argh!)
+        executer.expectDeprecationWarning() // each run clears args (argh!)
         run("compileScala")
 
         then:
@@ -86,6 +82,7 @@ class ZincScalaCompilerIntegrationTest extends BasicScalaCompilerIntegrationTest
         file("prj1/src/main/scala/Person.scala").delete()
         file("prj1/src/main/scala/Person.scala") << "class Person"
         args("-i", "-PscalaVersion=$version") // each run clears args (argh!)
+        executer.expectDeprecationWarning() // each run clears args (argh!)
         run("compileScala")
 
         then:
@@ -105,6 +102,7 @@ class ZincScalaCompilerIntegrationTest extends BasicScalaCompilerIntegrationTest
         file("src/main/scala/Person.scala").delete()
         file("src/main/scala/Person.scala") << "class Person"
         args("-i", "-PscalaVersion=$version") // each run clears args (argh!)
+        executer.expectDeprecationWarning() // each run clears args (argh!)
         run("compileScala")
 
         then:

@@ -15,23 +15,23 @@
  */
 package org.gradle.language.nativeplatform.internal.incremental;
 
+import com.google.common.hash.HashCode;
 import org.gradle.language.nativeplatform.internal.IncludeDirectives;
 import org.gradle.language.nativeplatform.internal.incremental.sourceparser.DefaultIncludeDirectives;
 
-import java.io.Serializable;
 import java.util.HashSet;
 import java.util.Set;
 
-public class CompilationFileState implements Serializable {
-    private byte[] hash;
+public class CompilationFileState {
+    private HashCode hash;
     private IncludeDirectives includeDirectives = new DefaultIncludeDirectives();
     private Set<ResolvedInclude> resolvedIncludes = new HashSet<ResolvedInclude>();
 
-    public CompilationFileState(byte[] hash) {
+    public CompilationFileState(HashCode hash) {
         this.hash = hash;
     }
 
-    public byte[] getHash() {
+    public HashCode getHash() {
         return hash;
     }
 

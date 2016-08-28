@@ -26,7 +26,10 @@ class ReleasedVersions {
     private static final int MILLIS_PER_DAY = 24 * 60 * 60 * 1000
 
     private lowestInterestingVersion = GradleVersion.version("0.8")
+    private lowestTestedVersion = GradleVersion.version("1.0")
+    private currentVersion = GradleVersion.current()
     private def versions
+    private def testedVersions
     private def snapshots
 
     File destFile
@@ -36,6 +39,7 @@ class ReleasedVersions {
     void prepare() {
         download()
         versions = calculateVersions()
+        testedVersions = calculateVersions(lowestTestedVersion)
         snapshots = calculateSnapshots()
     }
 
@@ -103,18 +107,39 @@ $standardErr""")
         return versions*.version*.version
     }
 
+    List<String> getTestedVersions() {
+        return testedVersions*.version*.version
+    }
+
     List<String> getAllSnapshots() {
         return snapshots*.version*.version
     }
 
-    List<Map<String, ?>> calculateVersions() {
+    private static boolean isActiveVersion(def version) {
+        // Ignore broken or snapshot versions
+        if (version.broken == true || version.snapshot == true) {
+            return false
+        }
+        // Ignore milestone releases
+        if (version.version.contains('milestone')) {
+            return false;
+        }
+        // Include only active RCs
+        if (version.rcFor != "") {
+            return version.activeRc
+        }
+        // Include all other versions
+        return true
+    }
+
+    List<Map<String, ?>> calculateVersions(def startingAt = lowestInterestingVersion) {
         def versions = new groovy.json.JsonSlurper().parseText(destFile.text).findAll {
-            (it.activeRc == true || it.rcFor == "") && it.broken == false && it.snapshot == false
+            isActiveVersion(it)
         }.collect {
             it.version = GradleVersion.version(it.version)
             it
         }.findAll {
-            it.version >= lowestInterestingVersion
+            it.version >= startingAt && it.version <= currentVersion
         }.sort {
             it.version
         }.reverse()

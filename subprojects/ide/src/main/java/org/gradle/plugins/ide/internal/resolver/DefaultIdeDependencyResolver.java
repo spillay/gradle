@@ -17,7 +17,12 @@
 package org.gradle.plugins.ide.internal.resolver;
 
 import org.gradle.api.Project;
-import org.gradle.api.artifacts.*;
+import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.Dependency;
+import org.gradle.api.artifacts.ModuleVersionIdentifier;
+import org.gradle.api.artifacts.ProjectDependency;
+import org.gradle.api.artifacts.ResolvedArtifact;
+import org.gradle.api.artifacts.SelfResolvingDependency;
 import org.gradle.api.artifacts.component.ComponentSelector;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
@@ -58,12 +63,18 @@ public class DefaultIdeDependencyResolver implements IdeDependencyResolver {
         List<IdeProjectDependency> ideProjectDependencies = new ArrayList<IdeProjectDependency>();
 
         for (ResolvedComponentResult projectComponent : projectComponents) {
-            Project resolvedProject = project.project(((ProjectComponentIdentifier) projectComponent.getId()).getProjectPath());
-            if(!resolvedProject.equals(project)) {
-                ideProjectDependencies.add(new IdeProjectDependency(configuration.getName(), resolvedProject));
+            ProjectComponentIdentifier projectId = (ProjectComponentIdentifier) projectComponent.getId();
+            String resolvedProjectPath = projectId.getProjectPath();
+            if (project.getPath().equals(resolvedProjectPath)) {
+                continue;
+            }
+            Project resolvedProject = project.findProject(resolvedProjectPath);
+            if (resolvedProject == null) {
+                ideProjectDependencies.add(new IdeProjectDependency(projectId));
+            } else {
+                ideProjectDependencies.add(new IdeProjectDependency(projectId, resolvedProject.getName()));
             }
         }
-
         return ideProjectDependencies;
     }
 
@@ -84,7 +95,7 @@ public class DefaultIdeDependencyResolver implements IdeDependencyResolver {
 
             String displayName = componentSelector.getDisplayName();
             File file = new File(unresolvedFileName(componentSelector));
-            unresolvedIdeRepoFileDependencies.add(new UnresolvedIdeRepoFileDependency(configuration.getName(), file, failure, displayName));
+            unresolvedIdeRepoFileDependencies.add(new UnresolvedIdeRepoFileDependency(file, failure, displayName));
         }
 
         return unresolvedIdeRepoFileDependencies;
@@ -119,7 +130,7 @@ public class DefaultIdeDependencyResolver implements IdeDependencyResolver {
         List<IdeExtendedRepoFileDependency> externalDependencies = new ArrayList<IdeExtendedRepoFileDependency>();
         for (ResolvedArtifact artifact : artifacts) {
             if (mappedResolvedDependencies.contains(artifact.getModuleVersion().getId())) {
-                IdeExtendedRepoFileDependency ideRepoFileDependency = new IdeExtendedRepoFileDependency(configuration.getName(), artifact.getFile());
+                IdeExtendedRepoFileDependency ideRepoFileDependency = new IdeExtendedRepoFileDependency(artifact.getFile());
                 ideRepoFileDependency.setId(artifact.getModuleVersion().getId());
                 externalDependencies.add(ideRepoFileDependency);
             }
@@ -157,7 +168,7 @@ public class DefaultIdeDependencyResolver implements IdeDependencyResolver {
             Set<File> resolvedFiles = externalDependency.resolve();
 
             for (File resolvedFile : resolvedFiles) {
-                IdeLocalFileDependency ideLocalFileDependency = new IdeLocalFileDependency(configuration.getName(), resolvedFile);
+                IdeLocalFileDependency ideLocalFileDependency = new IdeLocalFileDependency(resolvedFile);
                 ideLocalFileDependencies.add(ideLocalFileDependency);
             }
         }

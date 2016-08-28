@@ -20,7 +20,6 @@ import org.gradle.api.artifacts.ResolvedArtifact;
 import org.gradle.api.internal.artifacts.ArtifactDependencyResolver;
 import org.gradle.api.internal.artifacts.GlobalDependencyResolutionRules;
 import org.gradle.api.internal.artifacts.ResolveContext;
-import org.gradle.api.internal.artifacts.ResolvedConfigurationIdentifier;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.ArtifactSet;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.DefaultResolvedArtifactResults;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.DependencyArtifactsVisitor;
@@ -31,8 +30,8 @@ import org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository;
 import org.gradle.api.internal.file.AbstractFileCollection;
 import org.gradle.api.internal.tasks.DefaultTaskDependency;
 import org.gradle.api.tasks.TaskDependency;
-import org.gradle.internal.component.local.model.LocalConfigurationMetaData;
-import org.gradle.internal.component.model.ConfigurationMetaData;
+import org.gradle.internal.component.local.model.LocalConfigurationMetadata;
+import org.gradle.internal.component.model.ConfigurationMetadata;
 import org.gradle.internal.resolve.ModuleVersionResolveException;
 import org.gradle.language.base.internal.resolve.LibraryResolveException;
 import org.gradle.platform.base.internal.BinarySpecInternal;
@@ -70,7 +69,7 @@ public class DependencyResolvingClasspath extends AbstractFileCollection {
 
     @Override
     public String getDisplayName() {
-        return String.format("Classpath for %s", descriptor);
+        return "Classpath for " + descriptor;
     }
 
     @Override
@@ -111,7 +110,7 @@ public class DependencyResolvingClasspath extends AbstractFileCollection {
             throw new LibraryResolveException(String.format("Could not resolve all dependencies for '%s' %s", binary.getDisplayName(), descriptor), notFound);
         }
     }
-    
+
     class ResolveResult implements DependencyGraphVisitor, DependencyArtifactsVisitor {
         public final DefaultTaskDependency taskDependency = new DefaultTaskDependency();
         public final List<Throwable> notFound = new LinkedList<Throwable>();
@@ -123,9 +122,9 @@ public class DependencyResolvingClasspath extends AbstractFileCollection {
 
         @Override
         public void visitNode(DependencyGraphNode resolvedConfiguration) {
-            ConfigurationMetaData configurationMetaData = resolvedConfiguration.getMetaData();
-            if (configurationMetaData instanceof LocalConfigurationMetaData) {
-                TaskDependency directBuildDependencies = ((LocalConfigurationMetaData) configurationMetaData).getDirectBuildDependencies();
+            ConfigurationMetadata configurationMetadata = resolvedConfiguration.getMetadata();
+            if (configurationMetadata instanceof LocalConfigurationMetadata) {
+                TaskDependency directBuildDependencies = ((LocalConfigurationMetadata) configurationMetadata).getDirectBuildDependencies();
                 taskDependency.add(directBuildDependencies);
             }
 
@@ -146,7 +145,7 @@ public class DependencyResolvingClasspath extends AbstractFileCollection {
         }
 
         @Override
-        public void visitArtifacts(ResolvedConfigurationIdentifier parent, ResolvedConfigurationIdentifier child, ArtifactSet artifacts) {
+        public void visitArtifacts(DependencyGraphNode parent, DependencyGraphNode child, ArtifactSet artifacts) {
             artifactResults.addArtifactSet(artifacts);
         }
 

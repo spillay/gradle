@@ -17,39 +17,41 @@
 package org.gradle.testkit.runner.internal;
 
 import org.apache.commons.io.output.TeeOutputStream;
-import org.gradle.api.Transformer;
-import org.gradle.api.specs.Spec;
 import org.gradle.internal.SystemProperties;
-import org.gradle.internal.classpath.DefaultClassPath;
 import org.gradle.testkit.runner.BuildTask;
-import org.gradle.testkit.runner.IncompletePluginMetadataException;
 import org.gradle.testkit.runner.InvalidRunnerConfigurationException;
 import org.gradle.testkit.runner.TaskOutcome;
-import org.gradle.testkit.runner.internal.dist.GradleDistribution;
-import org.gradle.testkit.runner.internal.dist.InstalledGradleDistribution;
-import org.gradle.testkit.runner.internal.dist.URILocatedGradleDistribution;
-import org.gradle.testkit.runner.internal.dist.VersionBasedGradleDistribution;
+import org.gradle.testkit.runner.UnsupportedFeatureException;
 import org.gradle.testkit.runner.internal.feature.TestKitFeature;
 import org.gradle.testkit.runner.internal.io.NoCloseOutputStream;
 import org.gradle.testkit.runner.internal.io.SynchronizedOutputStream;
-import org.gradle.tooling.*;
+import org.gradle.tooling.BuildException;
+import org.gradle.tooling.GradleConnectionException;
+import org.gradle.tooling.GradleConnector;
+import org.gradle.tooling.ProjectConnection;
+import org.gradle.tooling.UnsupportedVersionException;
 import org.gradle.tooling.events.ProgressEvent;
 import org.gradle.tooling.events.ProgressListener;
-import org.gradle.tooling.events.task.*;
+import org.gradle.tooling.events.task.TaskFailureResult;
+import org.gradle.tooling.events.task.TaskFinishEvent;
+import org.gradle.tooling.events.task.TaskOperationResult;
+import org.gradle.tooling.events.task.TaskSkippedResult;
+import org.gradle.tooling.events.task.TaskStartEvent;
+import org.gradle.tooling.events.task.TaskSuccessResult;
 import org.gradle.tooling.internal.consumer.DefaultBuildLauncher;
 import org.gradle.tooling.internal.consumer.DefaultGradleConnector;
 import org.gradle.tooling.model.build.BuildEnvironment;
 import org.gradle.util.CollectionUtils;
-import org.gradle.util.GUtil;
 import org.gradle.util.GradleVersion;
 import org.gradle.wrapper.GradleUserHomeLookup;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.OutputStream;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -60,8 +62,6 @@ public class ToolingApiGradleExecutor implements GradleExecutor {
     public static final String TEST_KIT_DAEMON_DIR_NAME = "test-kit-daemon";
 
     private static final String CLEANUP_THREAD_NAME = "gradle-runner-cleanup";
-
-    private static final String IMPLEMENTATION_CLASSPATH_PROP_KEY = "implementation-classpath";
 
     private final static AtomicBoolean SHUTDOWN_REGISTERED = new AtomicBoolean();
 
@@ -87,7 +87,7 @@ public class ToolingApiGradleExecutor implements GradleExecutor {
             parameters.getGradleUserHome(),
             parameters.getProjectDir(),
             parameters.isEmbedded(),
-            parameters.getGradleDistribution()
+            parameters.getGradleProvider()
         );
 
         ProjectConnection connection = null;
@@ -96,6 +96,10 @@ public class ToolingApiGradleExecutor implements GradleExecutor {
         try {
             connection = gradleConnector.connect();
             targetGradleVersion = determineTargetGradleVersion(connection);
+            if (targetGradleVersion.compareTo(TestKitFeature.RUN_BUILDS.getSince()) < 0) {
+                throw new UnsupportedFeatureException(String.format("The version of Gradle you are using (%s) is not supported by TestKit. TestKit supports all Gradle versions 1.2 and later.", targetGradleVersion.getVersion()));
+            }
+
             DefaultBuildLauncher launcher = (DefaultBuildLauncher) connection.newBuild();
 
             launcher.setStandardOutput(new NoCloseOutputStream(teeOutput(syncOutput, parameters.getStandardOutput())));
@@ -106,7 +110,12 @@ public class ToolingApiGradleExecutor implements GradleExecutor {
             launcher.withArguments(parameters.getBuildArgs().toArray(new String[0]));
             launcher.setJvmArguments(parameters.getJvmArgs().toArray(new String[0]));
 
-            configureInjectedClasspath(launcher, parameters, targetGradleVersion);
+            if (!parameters.getInjectedClassPath().isEmpty()) {
+                if (targetGradleVersion.compareTo(TestKitFeature.PLUGIN_CLASSPATH_INJECTION.getSince()) < 0) {
+                    throw new UnsupportedFeatureException("support plugin classpath injection", targetGradleVersion, TestKitFeature.PLUGIN_CLASSPATH_INJECTION.getSince());
+                }
+                launcher.withInjectedClassPath(parameters.getInjectedClassPath());
+            }
 
             launcher.run();
         } catch (UnsupportedVersionException e) {
@@ -147,52 +156,6 @@ public class ToolingApiGradleExecutor implements GradleExecutor {
         return GradleVersion.version(buildEnvironment.getGradle().getGradleVersion());
     }
 
-    private boolean targetGradleVersionSupportsClasspathInjection(GradleVersion targetGradleVersion) {
-        return targetGradleVersion.compareTo(TestKitFeature.PLUGIN_CLASSPATH_INJECTION.getSince()) >= 0;
-    }
-
-    private void configureInjectedClasspath(DefaultBuildLauncher launcher, GradleExecutionParameters parameters, GradleVersion targetGradleVersion) {
-        List<File> pluginClasspath = readPluginClasspath();
-
-        if (!pluginClasspath.isEmpty() && targetGradleVersionSupportsClasspathInjection(targetGradleVersion)) {
-            launcher.withInjectedClassPath(new DefaultClassPath(pluginClasspath));
-        }
-
-        if (!parameters.getInjectedClassPath().isEmpty()) {
-            launcher.withInjectedClassPath(parameters.getInjectedClassPath());
-        }
-    }
-
-    private List<File> readPluginClasspath() {
-        URL[] classLoaderURLs = ((URLClassLoader) (Thread.currentThread().getContextClassLoader())).getURLs();
-        URL pluginClasspathUrl = CollectionUtils.findFirst(classLoaderURLs, new Spec<URL>() {
-            @Override
-            public boolean isSatisfiedBy(URL url) {
-                return url.toString().endsWith("pluginClasspathManifest/plugin-under-test-metadata.properties");
-            }
-        });
-
-        if (pluginClasspathUrl != null) {
-            Properties properties = GUtil.loadProperties(pluginClasspathUrl);
-
-            if (!properties.isEmpty()) {
-                if (!properties.containsKey(IMPLEMENTATION_CLASSPATH_PROP_KEY)) {
-                    throw new IncompletePluginMetadataException(String.format("Plugin classpath manifest file does not contain expected property named '%s'", IMPLEMENTATION_CLASSPATH_PROP_KEY));
-                }
-
-                String[] parsedImplementationClasspath = properties.getProperty(IMPLEMENTATION_CLASSPATH_PROP_KEY).split(",");
-                return CollectionUtils.collect(parsedImplementationClasspath, new Transformer<File, String>() {
-                    @Override
-                    public File transform(String classpathEntry) {
-                        return new File(classpathEntry);
-                    }
-                });
-            }
-        }
-
-        return Collections.emptyList();
-    }
-
     private static OutputStream teeOutput(OutputStream capture, OutputStream user) {
         if (user == null) {
             return capture;
@@ -201,9 +164,10 @@ public class ToolingApiGradleExecutor implements GradleExecutor {
         }
     }
 
-    private GradleConnector buildConnector(File gradleUserHome, File projectDir, boolean embedded, GradleDistribution gradleDistribution) {
+    private GradleConnector buildConnector(File gradleUserHome, File projectDir, boolean embedded, GradleProvider gradleProvider) {
         DefaultGradleConnector gradleConnector = (DefaultGradleConnector) GradleConnector.newConnector();
-        useGradleDistribution(gradleConnector, gradleDistribution);
+        gradleConnector.useDistributionBaseDir(GradleUserHomeLookup.gradleUserHome());
+        gradleProvider.applyTo(gradleConnector);
         gradleConnector.useGradleUserHomeDir(gradleUserHome);
         gradleConnector.daemonBaseDir(new File(gradleUserHome, TEST_KIT_DAEMON_DIR_NAME));
         gradleConnector.forProjectDirectory(projectDir);
@@ -211,18 +175,6 @@ public class ToolingApiGradleExecutor implements GradleExecutor {
         gradleConnector.daemonMaxIdleTime(120, TimeUnit.SECONDS);
         gradleConnector.embedded(embedded);
         return gradleConnector;
-    }
-
-    private void useGradleDistribution(DefaultGradleConnector gradleConnector, GradleDistribution gradleDistribution) {
-        gradleConnector.useDistributionBaseDir(GradleUserHomeLookup.gradleUserHome());
-
-        if (gradleDistribution instanceof InstalledGradleDistribution) {
-            gradleConnector.useInstallation(((InstalledGradleDistribution) gradleDistribution).getGradleHome());
-        } else if (gradleDistribution instanceof URILocatedGradleDistribution) {
-            gradleConnector.useDistribution(((URILocatedGradleDistribution) gradleDistribution).getLocation());
-        } else if (gradleDistribution instanceof VersionBasedGradleDistribution) {
-            gradleConnector.useGradleVersion(((VersionBasedGradleDistribution) gradleDistribution).getGradleVersion());
-        }
     }
 
     private class TaskExecutionProgressListener implements ProgressListener {

@@ -3,9 +3,15 @@ Fix robustness and diagnostic issues that prevent the daemon to be enabled by de
 ## Implementation plan
 
 - Add daemon stability tests
+    - existing stability related tests in
+        - DaemonPerformanceMonitoringIntegrationTest
+        - DaemonHealthLoggingIntegrationTest
 - Review and tune the existing disabled health monitoring
 - Add diagnostics
 - Spike additional strategies for health monitoring
+    - collect gc statistics
+    - discuss expose health via jmx
+    - discuss log health status in internal log format
 
 ## Candidate stories
 
@@ -73,7 +79,77 @@ Example gradle.properties: 'org.gradle.daemon.performance.info=true'
 - First build presents "Starting build..." message
 - Subsequent builds present "Executing x build..." message
 
-### Prevent memory leaks make daemon unusable, ensure high daemon performance
+### Prevent daemon with a leak from reaching a point where gc is thrashing
+
+We need to monitor garbage collection behavior and stop the daemon when a leak appears to be exhausting tenured heap space.  In order to do so, we want to look at two metrics:
+
+- Garbage collection rate - rate at which the tenured heap is being garbage collected
+- Tenured heap usage - the amount of space allocated in the tenured heap _after_ garbage collection
+
+We need to check these values after a build has completed (to decide whether a new build should occur) as well as periodically to catch scenarios where a runaway thread is leaking memory outside of a build.  If thresholds for both values have been tripped, we should expire the daemon either immediately or after the build if a build is running.
+
+#### Implementation
+
+- Register a polling mechanism to check garbage collection statistics once a second.  Gather:
+  - Garbage collection count (from GarbageCollectorMXBean)
+  - Tenured memory pool usage after garbage collection (from MemoryPoolMXBean)
+  - Timestamp of the current check
+- Maintain a window of up to 20 measurements (i.e. the state of the garbage collector over the last 20 seconds)
+- At the end of a build or during a periodic check, calculate the GC rate and average tenured heap usage from the window of events.  If both thresholds are crossed, request the daemon should stop.
+- For the Sun JVM, the threshold should be a GC rate of 1.5/s and 80% usage of tenured space.
+- For the IBM JVM, the threshold should be a GC rate of 1.5/s and 70% usage of tenured space.
+- For other JVMs, we won't implement this check.
+
+#### Test coverage
+
+- Detects fast leaks in builds with both a small (200m) and large heap (1024m) and stops daemon.
+- Detects slow leaks in builds with both a small (200m) and large heap (1024m) and stops daemon.
+- For a build that leaks without tripping the thresholds, the daemon is not stopped.
+- User can specify a threshold for gc rate and tenured heap usage
+
+### Prevent daemon with a Perm Gen leak on <=JDK7 from reaching a point where gc is thrashing
+
+We need to monitor garbage collection behavior and stop the daemon when a leak appears to be exhausting perm gen space.  In order to do so, we should only need to look at the usage of the perm gen memory pool.  There should not be a ton of churn on this pool, so simply measuring the usage after garbage collection should be enough to decide if there is a perm gen leak.
+
+We need to check this value after a build has completed (to decide whether a new build should occur) as well as periodically to catch scenarios where a runaway thread is leaking memory outside of a build.  If thresholds for both values have been tripped, we should expire the daemon either immediately or after the build if a build is running.
+
+#### Implementation
+
+- Register a polling mechanism to check perm gen memory pool usage once a second.
+- Maintain a window of up to 20 measurements (i.e. the state of the perm gen space over the last 20 seconds)
+- At the end of a build or during a periodic check, calculate the average perm gen usage from the window of events.  If the threshold is crossed, request the daemon should stop.
+- For the Sun JVM, the threshold should be 85% usage of perm gen space.
+- Most other JVMs don't use perm gen space, so we won't implement this check for anything other than the Sun JVM.
+
+#### Test coverage
+
+- Detects a perm gen leak in a build and expires the deamon at the end of a build
+- User can specify a threshold for perm gen heap usage
+
+### Detect when gc is thrashing and premptively stop the daemon
+
+We need to monitor garbage collection behavior and forcefully stop the daemon when it appears that the garbage collector is actively thrashing.  In order to do so, we want to look at two metrics:
+
+- Garbage collection rate - rate at which the tenured heap is being garbage collected
+- Tenured heap usage - the amount of space allocated in the tenured heap _after_ garbage collection
+
+We need to check these values periodically during a build.  If thresholds for both values have been tripped, we should forcefully stop the daemon to prevent an unresponsive state and notify the user.
+
+This story depends on the story for making daemon health visible.
+
+#### Test coverage
+
+- Detects gc thrash in a build that agrressively allocates/leaks memory and preemptively stops the daemon with a sensible error message.
+
+#### Implementation
+
+- Leverage the periodic garbage collection statistic checks to gather information about GC rate and average tenured usage. 
+- As part of the check, if both thresholds are crossed, immediately force stop the daemon, sending a message to the user.
+- For the Sun JVM, the threshold should be a GC rate of 20/s and 90% usage of tenured space.
+- For the IBM JVM, the threshold should be a GC rate of 20/s and 80% usage of tenured space.
+- For other JVMs, we won't implement this check.
+
+### Prevent memory leaks from making the daemon unusable, ensure high daemon performance
 
 Allow using daemon everywhere and always, even for CI builds. Ensure stability in serving builds.
 Prevent stalled builds when n-th build becomes memory-exhausted and stalls.
@@ -93,14 +169,72 @@ This can ensure stability in serving builds and avoid stalled build due to exhau
 
 - integration test that contains a leaky build. The build fails with OOME if the feature is turned off.
 
-### Prevent daemon become unresponsive due to gc thrashing
+### Story - Internally Expose Basic Daemon Information
+Some basic daemon status information is made, internally, available via the service registry. 
 
-#### Ideas
+1. The number of builds executed by the daemon
+1. The idle timeout of the daemon
+1. The number of running daemons
+1. The time at which the daemon was started
 
-- Daemon automatically prints out gc log events to the file in daemon dir. Useful for diagnosing offline.
-- Daemon writes gc log events and analyzes them:
-    - Understands and warns the user if throughput is going down
-    - Knows when gc is about to freeze the vm and and exits eagerly providing decent message to the user
-    - tracks memory leaks
-- Daemon scales memory automatically by starting with some defaults and gradually lowering the heap size
-- Daemon knows why the previous daemon exited. If it was due to memory problems a message is shown to the user.
+#### Implementation
+
+1. Introduce the following interface
+  ```java
+  package org.gradle.launcher.daemon.server.scaninfo;
+
+  public interface DaemonScanInfo {
+      int getNumberOfBuilds();
+      long getStartedAt();
+      long getIdleTimeout();
+      int getNumberOfRunningDaemons();
+  }
+  ```
+  With a default implementation with references to `org.gradle.launcher.daemon.server.health.DaemonStats` and `org.gradle.launcher.daemon.registry.DaemonRegistry`
+1. Expose `DaemonScanInfo` from `DaemonServices`
+1. `org.gradle.launcher.daemon.server.health.DaemonStats` provides getters for `buildCount` and a new attribute `startTime` (the time the daemon was started)
+1. `org.gradle.launcher.daemon.bootstrap.DaemonMain` passes the daemon start time to `DaemonServices`. This is not quite exactly the point in time that the daemon starts 
+ but may be close enough.
+1. `DaemonServices` is responsible for instantiating `org.gradle.launcher.daemon.server.health.DaemonScanInfo` e.g.
+  ```java
+    protected DaemonScanInfo createDaemonInformation(DaemonStats daemonStats) {
+        return DefaultDaemonScanInfo.of(daemonStats, configuration.getIdleTimeout(), get(DaemonRegistry.class));
+    }
+  ```
+1. `DaemonScanInfo` can be accessed via the service registry 
+  ```groovy
+     import org.gradle.launcher.daemon.server.scaninfo.DaemonScanInfo
+     DaemonScanInfo info = project.getServices().get(DaemonScanInfo)
+  ```
+
+#### Coverage
+- A DaemonIntegrationSpec which verifies all 4 data points 
+- The number of builds is correctly incremented when a daemon runs more than one build
+- The number of running builds is backed by the `org.gradle.launcher.daemon.registry.DaemonRegistry#getAll`
+- Works when the daemon is ran in the foreground `--foreground`
+- Works when the daemon is run with `--continuous`
+
+### Story - Internally register a listener for daemon expiration events
+
+#### Implementation
+
+1. Add `DaemonExpirationListenerRegistry` as a service via `org.gradle.launcher.daemon.server.DaemonServices`
+1. `DaemonExpirationListenerRegistry` takes the same `ListenerManager` used by `DaemonHealthCheck`
+1. Clients can register a listener as follows: 
+  ```groovy
+   def registry = project.getServices().get(org.gradle.launcher.daemon.server.DaemonExpirationListenerRegistry)
+   registry.register(new DaemonExpirationListener() {
+      @Override
+      public void onExpirationEvent(org.gradle.launcher.daemon.server.DaemonExpirationResult result) {
+          println "onExpirationEvent fired with: \${result.getReason()}"
+      }
+  })
+  ```
+
+#### Coverage
+- An integration test which:
+   - Registers a dummy `org.gradle.launcher.daemon.server.DaemonExpirationStrategy` which aways returns a `DaemonExpirationResult`
+   - Registers a `DaemonExpirationListener` which prints the `result` of `DaemonExpirationResult`
+   - Verifies the console output by the above `DaemonExpirationListener`
+- Works when the daemon is ran in the foreground `--foreground`
+- Works when the daemon is run with `--continuous`

@@ -22,7 +22,6 @@ import org.apache.http.HttpRequest;
 import org.apache.http.HttpRequestInterceptor;
 import org.apache.http.auth.*;
 import org.apache.http.client.CredentialsProvider;
-import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.client.config.AuthSchemes;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
@@ -44,7 +43,7 @@ import org.gradle.authentication.http.DigestAuthentication;
 import org.gradle.internal.Cast;
 import org.gradle.internal.authentication.AllSchemesAuthentication;
 import org.gradle.internal.authentication.AuthenticationInternal;
-import org.gradle.internal.resource.UriResource;
+import org.gradle.internal.resource.UriTextResource;
 import org.gradle.internal.resource.transport.http.ntlm.NTLMCredentials;
 import org.gradle.internal.resource.transport.http.ntlm.NTLMSchemeFactory;
 import org.gradle.util.CollectionUtils;
@@ -71,7 +70,6 @@ public class HttpClientConfigurer {
         configureAuthSchemeRegistry(builder);
         configureCredentials(builder, credentialsProvider, httpSettings.getAuthenticationSettings());
         configureProxy(builder, credentialsProvider, httpSettings);
-        configureRetryHandler(builder);
         configureUserAgent(builder);
         builder.setDefaultCredentialsProvider(credentialsProvider);
     }
@@ -145,7 +143,7 @@ public class HttpClientConfigurer {
     }
 
     public void configureUserAgent(HttpClientBuilder builder) {
-        builder.setUserAgent(UriResource.getUserAgentString());
+        builder.setUserAgent(UriTextResource.getUserAgentString());
     }
 
     private PasswordCredentials getPasswordCredentials(Authentication authentication) {
@@ -155,14 +153,6 @@ public class HttpClientConfigurer {
         }
 
         return Cast.uncheckedCast(credentials);
-    }
-
-    private void configureRetryHandler(HttpClientBuilder builder) {
-        builder.setRetryHandler(new HttpRequestRetryHandler() {
-            public boolean retryRequest(IOException exception, int executionCount, HttpContext context) {
-                return false;
-            }
-        });
     }
 
     private String getAuthScheme(Authentication authentication) {

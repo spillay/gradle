@@ -17,9 +17,11 @@
 package org.gradle.model.internal.inspect
 
 import org.gradle.model.*
-import org.gradle.model.internal.core.UnmanagedModelProjection
+import org.gradle.model.internal.core.TypeCompatibilityModelProjectionSupport
 import org.gradle.model.internal.core.rule.describe.MethodModelRuleDescriptor
+import org.gradle.model.internal.core.rule.describe.ModelRuleDescriptor
 import org.gradle.model.internal.fixture.ProjectRegistrySpec
+import org.gradle.model.internal.method.WeaklyTypeReferencingMethod
 import org.gradle.model.internal.registry.DefaultModelRegistry
 import org.gradle.model.internal.report.AmbiguousBindingReporter
 import org.gradle.model.internal.report.IncompatibleTypeReferenceReporter
@@ -49,7 +51,6 @@ class ModelRuleBindingTest extends ProjectRegistrySpec {
         }
     }
 
-
     def "error message produced when unpathed reference matches more than one item"() {
         when:
         modelRegistry.getRoot().applyToSelf(AmbiguousBindingsInOneSource)
@@ -57,14 +58,21 @@ class ModelRuleBindingTest extends ProjectRegistrySpec {
 
         then:
         def e = thrown(InvalidModelRuleException)
-        e.descriptor == MethodModelRuleDescriptor.of(AmbiguousBindingsInOneSource, "m").toString()
+        e.descriptor == methodDescriptor(AmbiguousBindingsInOneSource, "m").toString()
         def cause = e.cause as ModelRuleBindingException
         def message = new AmbiguousBindingReporter(String.name, "parameter 1", [
-            new AmbiguousBindingReporter.Provider("s2", MethodModelRuleDescriptor.of(AmbiguousBindingsInOneSource, "s2").toString()),
-            new AmbiguousBindingReporter.Provider("s1", MethodModelRuleDescriptor.of(AmbiguousBindingsInOneSource, "s1").toString()),
+            new AmbiguousBindingReporter.Provider("s2", methodDescriptor(AmbiguousBindingsInOneSource, "s2").toString()),
+            new AmbiguousBindingReporter.Provider("s1", methodDescriptor(AmbiguousBindingsInOneSource, "s1").toString()),
         ]).asString()
 
         cause.message == message
+    }
+
+    private ModelRuleDescriptor methodDescriptor(Class type, String methodName) {
+        def declaringType = ModelType.of(type)
+        def method = type.getDeclaredMethods().find { it.name == methodName }
+
+        MethodModelRuleDescriptor.of(WeaklyTypeReferencingMethod.of(declaringType, ModelType.of(method.returnType), method))
     }
 
     static class ProvidesStringOne extends RuleSource {
@@ -98,12 +106,12 @@ class ModelRuleBindingTest extends ProjectRegistrySpec {
 
         then:
         def e = thrown(InvalidModelRuleException)
-        e.descriptor == MethodModelRuleDescriptor.of(MutatesString, "m").toString()
+        e.descriptor == methodDescriptor(MutatesString, "m").toString()
 
         def cause = e.cause as ModelRuleBindingException
         def message = new AmbiguousBindingReporter(String.name, "parameter 1", [
-            new AmbiguousBindingReporter.Provider("s2", MethodModelRuleDescriptor.of(ProvidesStringTwo, "s2").toString()),
-            new AmbiguousBindingReporter.Provider("s1", MethodModelRuleDescriptor.of(ProvidesStringOne, "s1").toString()),
+            new AmbiguousBindingReporter.Provider("s2", methodDescriptor(ProvidesStringTwo, "s2").toString()),
+            new AmbiguousBindingReporter.Provider("s1", methodDescriptor(ProvidesStringOne, "s1").toString()),
         ]).asString()
 
         cause.message == message
@@ -129,16 +137,19 @@ class ModelRuleBindingTest extends ProjectRegistrySpec {
 
         then:
         def e = thrown(InvalidModelRuleException)
-        e.descriptor == MethodModelRuleDescriptor.of(MutatesS1AsInteger, "m").toString()
+        e.descriptor == methodDescriptor(MutatesS1AsInteger, "m").toString()
 
         def cause = e.cause as ModelRuleBindingException
         def message = new IncompatibleTypeReferenceReporter(
-            MethodModelRuleDescriptor.of(ProvidesStringOne, "s1").toString(),
+            methodDescriptor(ProvidesStringOne, "s1").toString(),
             "s1",
             Integer.name,
             "parameter 1",
             true,
-            [UnmanagedModelProjection.description(ModelType.of(String))]
+            [
+                TypeCompatibilityModelProjectionSupport.description(ModelType.of(String)),
+                TypeCompatibilityModelProjectionSupport.description(ModelType.of(ModelElement))
+            ]
         ).asString()
 
         cause.message == message
@@ -164,16 +175,19 @@ class ModelRuleBindingTest extends ProjectRegistrySpec {
 
         then:
         def e = thrown(InvalidModelRuleException)
-        e.descriptor == MethodModelRuleDescriptor.of(ReadS1AsInteger, "m").toString()
+        e.descriptor == methodDescriptor(ReadS1AsInteger, "m").toString()
 
         def cause = e.cause as ModelRuleBindingException
         def message = new IncompatibleTypeReferenceReporter(
-            MethodModelRuleDescriptor.of(ProvidesStringOne, "s1").toString(),
+            methodDescriptor(ProvidesStringOne, "s1").toString(),
             "s1",
             Integer.name,
             "parameter 2",
             false,
-            [UnmanagedModelProjection.description(ModelType.of(String))]
+            [
+                TypeCompatibilityModelProjectionSupport.description(ModelType.of(String)),
+                TypeCompatibilityModelProjectionSupport.description(ModelType.of(ModelElement))
+            ]
         ).asString()
 
         cause.message == message

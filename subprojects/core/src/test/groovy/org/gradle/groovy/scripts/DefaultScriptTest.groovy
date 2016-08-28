@@ -22,14 +22,16 @@ import org.codehaus.groovy.control.CompilerConfiguration
 import org.gradle.api.initialization.dsl.ScriptHandler
 import org.gradle.api.internal.file.FileLookup
 import org.gradle.api.internal.file.collections.DirectoryFileTreeFactory
-import org.gradle.api.internal.project.DefaultProject
+import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.logging.LoggingManager
+import org.gradle.internal.logging.StandardOutputCapture
 import org.gradle.internal.reflect.Instantiator
 import org.gradle.internal.service.ServiceRegistry
-import org.gradle.logging.StandardOutputCapture
+import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.gradle.util.JUnit4GroovyMockery
 import org.gradle.util.TestUtil
 import org.jmock.integration.junit4.JMock
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -38,6 +40,8 @@ import static org.junit.Assert.assertEquals
 @RunWith(JMock)
 class DefaultScriptTest {
     private final JUnit4GroovyMockery context = new JUnit4GroovyMockery()
+    @Rule
+    final TestNameTestDirectoryProvider temporaryFolder = TestNameTestDirectoryProvider.newInstance()
 
     @Test public void testApplyMetaData() {
         ServiceRegistry serviceRegistryMock = context.mock(ServiceRegistry.class)
@@ -57,7 +61,7 @@ class DefaultScriptTest {
         }
 
         DefaultScript script = new GroovyShell(createBaseCompilerConfiguration()).parse(testScriptText)
-        DefaultProject testProject = TestUtil.createRootProject()
+        ProjectInternal testProject = TestUtil.create(temporaryFolder).rootProject()
         testProject.ext.custom = 'true'
         script.setScriptSource(new StringScriptSource('script', '//'))
         script.init(testProject, serviceRegistryMock)
@@ -77,7 +81,7 @@ class DefaultScriptTest {
 // We leave out the path to check import adding
 getName() // call a project method
 assert hasProperty('custom')
-repositories { } 
+repositories { }
 def scriptMethod() { 'scriptMethod' }
 String internalProp = 'a'
 assert internalProp == 'a'

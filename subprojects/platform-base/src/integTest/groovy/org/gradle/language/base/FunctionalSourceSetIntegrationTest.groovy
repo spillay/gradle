@@ -35,7 +35,9 @@ class FunctionalSourceSetIntegrationTest extends AbstractIntegrationSpec {
             @Mutate void printTask(ModelMap<Task> tasks, FunctionalSourceSet sources) {
                 tasks.create("printTask") {
                     doLast {
-                        println sources
+                        println "name: " + sources.name
+                        println "display-name: " + sources.displayName
+                        println "to-string: " + sources.toString()
                     }
                 }
             }
@@ -45,7 +47,38 @@ class FunctionalSourceSetIntegrationTest extends AbstractIntegrationSpec {
 
         expect:
         succeeds "printTask"
-        output.contains("FunctionalSourceSet 'fss'")
+        output.contains("name: fss")
+        output.contains("display-name: FunctionalSourceSet 'fss'")
+        output.contains("to-string: FunctionalSourceSet 'fss'")
+    }
+
+    def "can view a functional source set as a ModelElement"() {
+        buildScript """
+        apply plugin: 'language-base'
+
+        class Rules extends RuleSource {
+            @Model
+            void fss(FunctionalSourceSet sources) {
+            }
+
+            @Mutate void printTask(ModelMap<Task> tasks, @Path("fss") ModelElement sources) {
+                tasks.create("printTask") {
+                    doLast {
+                        println "name: " + sources.name
+                        println "display-name: " + sources.displayName
+                        println "to-string: " + sources.toString()
+                    }
+                }
+            }
+        }
+        apply plugin: Rules
+        """
+
+        expect:
+        succeeds "printTask"
+        output.contains("name: fss")
+        output.contains("display-name: FunctionalSourceSet 'fss'")
+        output.contains("to-string: FunctionalSourceSet 'fss'")
     }
 
     def "can create a top level functional source set via the model dsl"() {
@@ -114,7 +147,7 @@ class FunctionalSourceSetIntegrationTest extends AbstractIntegrationSpec {
         def buildType = ModelReportOutput.from(output).modelNode.buildType
 
         buildType.sources.@type[0] == 'org.gradle.language.base.FunctionalSourceSet'
-        buildType.sources.@creator[0] == 'Rules#buildType'
+        buildType.sources.@creator[0] == 'Rules#buildType(BuildType)'
     }
 
     def "can have FunctionalSourceSets as managed collection"() {
@@ -146,14 +179,14 @@ class FunctionalSourceSetIntegrationTest extends AbstractIntegrationSpec {
         def buildType = ModelReportOutput.from(output).modelNode.buildType
 
         buildType.componentSources.@type[0] == 'org.gradle.model.ModelMap<org.gradle.language.base.FunctionalSourceSet>'
-        buildType.componentSources.@creator[0] == 'Rules#buildType'
+        buildType.componentSources.@creator[0] == 'Rules#buildType(BuildType)'
         buildType.componentSources.componentA.@type[0] == 'org.gradle.language.base.FunctionalSourceSet'
-        buildType.componentSources.componentA.@creator[0] == 'Rules#addSources > create(componentA)'
+        buildType.componentSources.componentA.@creator[0] == 'Rules#addSources(BuildType) > create(componentA)'
 
         buildType.testSources.@type[0] == 'org.gradle.model.ModelSet<org.gradle.language.base.FunctionalSourceSet>'
-        buildType.testSources.@creator[0] == 'Rules#buildType'
+        buildType.testSources.@creator[0] == 'Rules#buildType(BuildType)'
         buildType.testSources."0".@type[0] == 'org.gradle.language.base.FunctionalSourceSet'
-        buildType.testSources."0".@creator[0] == 'Rules#addSources > create()'
+        buildType.testSources."0".@creator[0] == 'Rules#addSources(BuildType) > create()'
     }
 
     def "can register a language source set"() {

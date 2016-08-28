@@ -20,8 +20,8 @@ import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.DependencyGraphNode;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.DependencyGraphVisitor;
-import org.gradle.internal.component.local.model.LocalConfigurationMetaData;
-import org.gradle.internal.component.model.ConfigurationMetaData;
+import org.gradle.internal.component.local.model.LocalConfigurationMetadata;
+import org.gradle.internal.component.model.ConfigurationMetadata;
 
 public class ResolvedLocalComponentsResultGraphVisitor implements DependencyGraphVisitor {
     private final ResolvedLocalComponentsResultBuilder builder;
@@ -33,22 +33,22 @@ public class ResolvedLocalComponentsResultGraphVisitor implements DependencyGrap
 
     @Override
     public void start(DependencyGraphNode root) {
-        rootId = root.getComponentId();
+        rootId = root.getOwner().getComponentId();
     }
 
     @Override
     public void visitNode(DependencyGraphNode resolvedConfiguration) {
-        if (rootId.equals(resolvedConfiguration.getComponentId())) {
+        ComponentIdentifier componentId = resolvedConfiguration.getOwner().getComponentId();
+        if (rootId.equals(componentId)) {
             return;
         }
 
-        ComponentIdentifier componentId = resolvedConfiguration.getComponentId();
         if (componentId instanceof ProjectComponentIdentifier) {
             builder.projectConfigurationResolved((ProjectComponentIdentifier) componentId, resolvedConfiguration.getNodeId().getConfiguration());
         }
-        ConfigurationMetaData configurationMetaData = resolvedConfiguration.getMetaData();
-        if (configurationMetaData instanceof LocalConfigurationMetaData) {
-            builder.localComponentResolved(componentId, ((LocalConfigurationMetaData) configurationMetaData).getDirectBuildDependencies());
+        ConfigurationMetadata configurationMetadata = resolvedConfiguration.getMetadata();
+        if (configurationMetadata instanceof LocalConfigurationMetadata) {
+            builder.localComponentResolved(componentId, ((LocalConfigurationMetadata) configurationMetadata).getDirectBuildDependencies());
         }
     }
 

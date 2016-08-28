@@ -141,6 +141,9 @@ public class TestFile extends File {
 
     public TestFile[] listFiles() {
         File[] children = super.listFiles();
+        if (children == null) {
+            return null;
+        }
         TestFile[] files = new TestFile[children.length];
         for (int i = 0; i < children.length; i++) {
             File child = children[i];
@@ -568,6 +571,16 @@ public class TestFile extends File {
 
     public TestFile tbzTo(TestFile tarFile, boolean readOnly) {
         new TestFileHelper(this).tbzTo(tarFile, readOnly);
+        return this;
+    }
+
+    public TestFile bzip2To(TestFile compressedFile) {
+        new TestFileHelper(this).bzip2To(compressedFile);
+        return this;
+    }
+
+    public TestFile gzipTo(TestFile compressedFile) {
+        new TestFileHelper(this).gzipTo(compressedFile);
         return this;
     }
 

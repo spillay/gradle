@@ -23,13 +23,13 @@ class DependencyHandlerApiResolveIntegrationTest extends AbstractIntegrationSpec
     public static final String GRADLE_TEST_KIT_JAR_BASE_NAME = 'gradle-test-kit-'
 
     def setup() {
-        executer.requireGradleHome()
+        executer.requireGradleDistribution()
 
         buildFile << """
             apply plugin: 'java'
 
             task resolveLibs(type: Copy) {
-                ext.extractedDir = file('\$buildDir/libs')
+                ext.extractedDir = file("\$buildDir/libs")
                 from configurations.testCompile
                 into extractedDir
             }
@@ -49,15 +49,17 @@ class DependencyHandlerApiResolveIntegrationTest extends AbstractIntegrationSpec
             verifyTestKitJars {
                 doLast {
                     def jarFiles = resolveLibs.extractedDir.listFiles()
-                    assert jarFiles.size() == 1
-                    def testKitFunctionalJar = jarFiles[0]
-                    assert testKitFunctionalJar.name.startsWith('$GRADLE_TEST_KIT_JAR_BASE_NAME')
+                    def testKitFunctionalJar = jarFiles.find { it.name.startsWith('$GRADLE_TEST_KIT_JAR_BASE_NAME') }
+                    assert testKitFunctionalJar
 
                     def jar = new java.util.jar.JarFile(testKitFunctionalJar)
-                    def jarFileEntries = jar.entries()
-
-                    def classFiles = jarFileEntries.collect {
-                        it.name.startsWith('org/gradle/testkit') && it.name.endsWith('.class')
+                    def classFiles
+                    try {
+                        classFiles = jar.entries().collect {
+                            it.name.startsWith('org/gradle/testkit') && it.name.endsWith('.class')
+                        }
+                    } finally {
+                        jar.close()
                     }
 
                     assert !classFiles.empty

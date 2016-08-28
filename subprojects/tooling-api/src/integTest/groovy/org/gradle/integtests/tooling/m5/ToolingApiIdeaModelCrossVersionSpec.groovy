@@ -14,10 +14,16 @@
  * limitations under the License.
  */
 package org.gradle.integtests.tooling.m5
+
 import org.gradle.integtests.tooling.fixture.TargetGradleVersion
 import org.gradle.integtests.tooling.fixture.ToolingApiSpecification
 import org.gradle.test.fixtures.maven.MavenFileRepository
-import org.gradle.tooling.model.idea.*
+import org.gradle.tooling.model.idea.BasicIdeaProject
+import org.gradle.tooling.model.idea.IdeaContentRoot
+import org.gradle.tooling.model.idea.IdeaModule
+import org.gradle.tooling.model.idea.IdeaModuleDependency
+import org.gradle.tooling.model.idea.IdeaProject
+import org.gradle.tooling.model.idea.IdeaSingleEntryLibraryDependency
 
 class ToolingApiIdeaModelCrossVersionSpec extends ToolingApiSpecification {
 
@@ -161,7 +167,7 @@ idea.module.excludeDirs += file('foo')
 
         def fakeRepo = file("repo")
 
-        def dependency = new MavenFileRepository(fakeRepo).module("foo.bar", "coolLib", 1.0)
+        def dependency = new MavenFileRepository(fakeRepo).module("foo.bar", "coolLib", "1.0")
         dependency.artifact(classifier: 'sources')
         dependency.artifact(classifier: 'javadoc')
         dependency.publish()
@@ -212,7 +218,7 @@ project(':impl') {
         mod.scope.scope == 'COMPILE'
     }
 
-    @TargetGradleVersion('>=1.0-milestone-8 <=2.7')
+    @TargetGradleVersion('>=1.2 <=2.7')
     def "makes sure module names are unique"() {
 
         file('build.gradle').text = """

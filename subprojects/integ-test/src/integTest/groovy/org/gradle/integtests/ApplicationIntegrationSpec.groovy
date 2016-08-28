@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package org.gradle.integtests
+
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.ScriptExecuter
 import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
@@ -21,7 +22,6 @@ import org.gradle.internal.os.OperatingSystem
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.util.TextUtil
 import spock.lang.IgnoreIf
-import spock.lang.Unroll
 
 import static org.hamcrest.Matchers.startsWith
 
@@ -281,25 +281,15 @@ class Main {
         checkApplicationImage('application', distTarDir.file('application'))
     }
 
-    @Unroll
-    def "#installTask complains if install directory exists and doesn't look like previous install"() {
-        setup:
-        if(deprecatedTask){
-            executer.withDeprecationChecksDisabled()
-        }
-
+    def "install task complains if install directory exists and doesn't look like previous install"() {
         file('build.gradle') << """
-${installTask}.destinationDir = buildDir
+installDist.destinationDir = buildDir
 """
         when:
-        runAndFail installTask
+        runAndFail "installDist"
 
         then:
         result.assertThatCause(startsWith("The specified installation directory '${file('build')}' is neither empty nor does it contain an installation"))
-        where:
-        installTask     | deprecatedTask
-        "installApp"    | true
-        "installDist"   | false
     }
 
     def "startScripts respect OS dependent line separators"() {
@@ -313,11 +303,11 @@ ${installTask}.destinationDir = buildDir
         then:
         File generatedWindowsStartScript = file("build/scripts/application.bat")
         generatedWindowsStartScript.exists()
-        assertLineSeparators(generatedWindowsStartScript, TextUtil.windowsLineSeparator, 90);
+        assertLineSeparators(generatedWindowsStartScript, TextUtil.windowsLineSeparator, 84);
 
         File generatedLinuxStartScript = file("build/scripts/application")
         generatedLinuxStartScript.exists()
-        assertLineSeparators(generatedLinuxStartScript, TextUtil.unixLineSeparator, 164);
+        assertLineSeparators(generatedLinuxStartScript, TextUtil.unixLineSeparator, 169);
         assertLineSeparators(generatedLinuxStartScript, TextUtil.windowsLineSeparator, 1)
 
         file("build/scripts/application").exists()

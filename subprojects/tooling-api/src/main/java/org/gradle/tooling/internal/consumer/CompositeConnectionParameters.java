@@ -15,11 +15,10 @@
  */
 package org.gradle.tooling.internal.consumer;
 
-import org.gradle.tooling.internal.composite.GradleBuildInternal;
+import org.gradle.internal.composite.GradleParticipantBuild;
 
 import java.util.List;
 
 public interface CompositeConnectionParameters extends ConnectionParameters {
-    List<GradleBuildInternal> getBuilds();
-    boolean isEmbeddedParticipants();
+    List<GradleParticipantBuild> getBuilds();
 }

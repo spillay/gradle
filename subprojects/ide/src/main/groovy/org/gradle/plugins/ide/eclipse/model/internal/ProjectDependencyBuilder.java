@@ -16,39 +16,30 @@
 
 package org.gradle.plugins.ide.eclipse.model.internal;
 
-import org.gradle.api.Project;
-import org.gradle.plugins.ide.eclipse.EclipsePlugin;
-import org.gradle.plugins.ide.eclipse.model.EclipseModel;
+import org.gradle.api.internal.composite.CompositeBuildIdeProjectResolver;
+import org.gradle.internal.component.model.ComponentArtifactMetadata;
 import org.gradle.plugins.ide.eclipse.model.ProjectDependency;
 import org.gradle.plugins.ide.internal.resolver.model.IdeProjectDependency;
-import org.gradle.util.DeprecationLogger;
 
 public class ProjectDependencyBuilder {
+    private final CompositeBuildIdeProjectResolver ideProjectResolver;
+
+    public ProjectDependencyBuilder(CompositeBuildIdeProjectResolver ideProjectResolver) {
+        this.ideProjectResolver = ideProjectResolver;
+    }
+
     public ProjectDependency build(IdeProjectDependency dependency) {
-        Project project = dependency.getProject();
-        return buildProjectDependency(determineProjectName(project), project.getPath(), dependency.getDeclaredConfiguration());
+        return buildProjectDependency(determineProjectName(dependency), dependency.getProjectPath());
     }
 
-    private String determineProjectName(Project project) {
-        String name;
-        if (project.getPlugins().hasPlugin(EclipsePlugin.class)) {
-            name = project.getExtensions().getByType(EclipseModel.class).getProject().getName();
-        } else {
-            name = project.getName();
-        }
-        return name;
+    private String determineProjectName(IdeProjectDependency dependency) {
+        ComponentArtifactMetadata eclipseProjectArtifact = ideProjectResolver.resolveArtifact(dependency.getProjectId(), "eclipse.project");
+        return eclipseProjectArtifact == null ? dependency.getProjectName() : eclipseProjectArtifact.getName().getName();
     }
 
-    private ProjectDependency buildProjectDependency(String name, String projectPath, final String declaredConfigurationName) {
+    private ProjectDependency buildProjectDependency(String name, String projectPath) {
         final ProjectDependency out = new ProjectDependency("/" + name, projectPath);
         out.setExported(false);
-        DeprecationLogger.whileDisabled(new Runnable() {
-            @Override
-            public void run() {
-                out.setDeclaredConfigurationName(declaredConfigurationName);
-            }
-
-        });
         return out;
     }
 }

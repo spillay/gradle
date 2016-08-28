@@ -25,12 +25,13 @@ import org.gradle.internal.Transformers;
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.jvm.JvmByteCode;
 import org.gradle.jvm.internal.*;
+import org.gradle.jvm.internal.resolve.SourceSetDependencyResolvingClasspath;
 import org.gradle.jvm.platform.JavaPlatform;
 import org.gradle.language.base.DependentSourceSet;
 import org.gradle.language.base.LanguageSourceSet;
 import org.gradle.language.base.internal.SourceTransformTaskConfig;
-import org.gradle.language.base.internal.model.DefaultVariantsMetaData;
-import org.gradle.language.base.internal.model.VariantsMetaData;
+import org.gradle.jvm.internal.resolve.DefaultVariantsMetaData;
+import org.gradle.jvm.internal.resolve.VariantsMetaData;
 import org.gradle.language.base.internal.registry.LanguageTransform;
 import org.gradle.language.base.internal.registry.LanguageTransformContainer;
 import org.gradle.language.base.plugins.ComponentModelBasePlugin;
@@ -149,7 +150,7 @@ public class JavaLanguagePlugin implements Plugin<Project> {
                 JvmAssembly assembly = ((WithJvmAssembly) binary).getAssembly();
                 assembly.builtBy(compile);
 
-                compile.setDescription(String.format("Compiles %s.", javaSourceSet));
+                compile.setDescription("Compiles " + javaSourceSet + ".");
                 compile.setDestinationDir(conventionalCompilationOutputDirFor(assembly));
                 compile.setDependencyCacheDir(new File(compile.getProject().getBuildDir(), "jvm-dep-cache"));
                 compile.dependsOn(javaSourceSet);

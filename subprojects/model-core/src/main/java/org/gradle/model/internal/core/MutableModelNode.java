@@ -34,7 +34,7 @@ public interface MutableModelNode extends ModelNode {
     Iterable<String> getTypeDescriptions();
 
     /**
-     * Creates a mutable view over this node's value.
+     * Creates a (potentially) mutable view over this node's value. When this node is not mutable, an immutable view is returned instead.
      *
      * Callers should try to {@link ModelView#close()} the returned view when it is done with, allowing any internal cleanup to occur.
      *
@@ -120,6 +120,8 @@ public interface MutableModelNode extends ModelNode {
     int getLinkCount(Predicate<? super MutableModelNode> predicate);
 
     Set<String> getLinkNames(Predicate<? super MutableModelNode> predicate);
+
+    Set<String> getLinkNames();
 
     @Override
     Iterable<? extends MutableModelNode> getLinks(ModelType<?> type);

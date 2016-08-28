@@ -17,9 +17,11 @@
 package org.gradle.tooling.internal.provider;
 
 import com.google.common.collect.MapMaker;
+import com.google.common.io.ByteStreams;
 import net.jcip.annotations.ThreadSafe;
 import org.gradle.api.GradleException;
 import org.gradle.internal.classloader.ClasspathUtil;
+import org.gradle.util.internal.Java9ClassReader;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Type;
 import org.slf4j.Logger;
@@ -28,7 +30,11 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.InputStream;
 import java.net.URL;
-import java.util.*;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -63,7 +69,8 @@ public class ClasspathInferer {
      */
     private void find(Class<?> target, Collection<Class<?>> visited, Collection<URL> dest) {
         ClassLoader targetClassLoader = target.getClassLoader();
-        if (targetClassLoader == null) {
+        if (targetClassLoader == null
+            || targetClassLoader.getClass().getName().equals("jdk.internal.loader.ClassLoaders$PlatformClassLoader")) { // At some point we probably want to build the modulepath using this information
             // A system class, skip it
             return;
         }
@@ -88,7 +95,7 @@ public class ClasspathInferer {
             ClassReader reader;
             InputStream inputStream = resource.openStream();
             try {
-                reader = new ClassReader(inputStream);
+                reader = new Java9ClassReader(ByteStreams.toByteArray(inputStream));
             } finally {
                 inputStream.close();
             }

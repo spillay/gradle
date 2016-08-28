@@ -16,9 +16,9 @@
 package org.gradle.language.nativeplatform.internal.incremental;
 
 import com.google.common.collect.Sets;
+import org.gradle.internal.FileUtils;
 import org.gradle.language.nativeplatform.internal.Include;
 import org.gradle.language.nativeplatform.internal.IncludeDirectives;
-import org.gradle.util.GFileUtils;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -60,7 +60,14 @@ public class DefaultSourceIncludesResolver implements SourceIncludesResolver {
     private void searchForDependency(List<File> searchPath, String include, BuildableResolvedSourceIncludes dependencies) {
         for (File searchDir : searchPath) {
             File candidate = new File(searchDir, include);
-            dependencies.searched(candidate);
+            // TODO: SLG This isn't correct, we need to consider directories too
+            // If a source file is #include <type_trait>
+            // and includePath = [ A, B ]
+            // and /B/type_trait is the header we want.
+            // We need /A/type_trait to be recorded as a directory in case it becomes a file later.
+            if (!candidate.isDirectory()) {
+                dependencies.searched(candidate);
+            }
             if (candidate.isFile()) {
                 dependencies.resolved(include, candidate);
                 return;
@@ -77,7 +84,7 @@ public class DefaultSourceIncludesResolver implements SourceIncludesResolver {
         }
 
         void resolved(String rawInclude, File resolved) {
-            File dependencyFile = resolved == null ? null : GFileUtils.canonicalise(resolved);
+            File dependencyFile = resolved == null ? null : FileUtils.canonicalize(resolved);
             dependencies.add(new ResolvedInclude(rawInclude, dependencyFile));
         }
 

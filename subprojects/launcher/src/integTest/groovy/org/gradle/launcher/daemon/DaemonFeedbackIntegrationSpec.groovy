@@ -100,7 +100,7 @@ task sleep << {
         given:
         file("build.gradle") << "task foo << { println 'hey!' }"
 
-        when: "runing build with --info"
+        when: "running build with --info"
         executer.withArguments("-i").withTasks('foo').run()
 
         then:
@@ -187,6 +187,9 @@ task sleep << {
         daemon.standardOutput.count("debug me!") == 1
 
         debugBuild.output.count("debug me!") == 1
+
+        cleanup:
+        daemon.abort()
     }
 
     List<File> getLogs(File baseDir) {

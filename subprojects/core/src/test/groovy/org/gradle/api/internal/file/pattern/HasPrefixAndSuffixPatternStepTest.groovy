@@ -16,48 +16,55 @@
 
 package org.gradle.api.internal.file.pattern
 
+import spock.lang.Issue
 import spock.lang.Specification
-import spock.lang.Unroll
 
 class HasPrefixAndSuffixPatternStepTest extends Specification {
-    @Unroll
-    def "matches name case sensitive when isFile is #isFile"() {
-        def step = new HasPrefixAndSuffixPatternStep("pre", "suf", true)
+    static final boolean CASE_SENSITIVE = true;
+    static final boolean CASE_INSENSITIVE = false;
+
+    def "matches name case sensitive"() {
+        def step = new HasPrefixAndSuffixPatternStep("pre", "suf", CASE_SENSITIVE)
 
         expect:
-        step.matches("pre-suf", isFile)
-        step.matches("presufsuf", isFile)
-        step.matches("presuf", isFile)
-        !step.matches("", isFile)
-        !step.matches("pre", isFile)
-        !step.matches("pre-su", isFile)
-        !step.matches("pre-s", isFile)
-        !step.matches("suf", isFile)
-        !step.matches("re-suf", isFile)
-        !step.matches("e-suf", isFile)
-        !step.matches("Pre-Suf", isFile)
-        !step.matches("", isFile)
-        !step.matches("something else", isFile)
-
-        where:
-        isFile << [true, false]
+        step.matches("pre-suf")
+        step.matches("presufsuf")
+        step.matches("presuf")
+        !step.matches("")
+        !step.matches("pre")
+        !step.matches("pre-su")
+        !step.matches("pre-s")
+        !step.matches("suf")
+        !step.matches("re-suf")
+        !step.matches("e-suf")
+        !step.matches("Pre-Suf")
+        !step.matches("")
+        !step.matches("something else")
     }
 
-    @Unroll
-    def "matches name case insensitive when isFile is #isFile"() {
-        def step = new HasPrefixAndSuffixPatternStep("pre", "suf", false)
+    def "matches name case insensitive"() {
+        def step = new HasPrefixAndSuffixPatternStep("pre", "suf", CASE_INSENSITIVE)
 
         expect:
-        step.matches("pre-suf", isFile)
-        step.matches("PRE-SUF", isFile)
-        step.matches("Pre-Suf", isFile)
-        !step.matches("PRE", isFile)
-        !step.matches("SUF", isFile)
-        !step.matches("PRSU", isFile)
-        !step.matches("", isFile)
-        !step.matches("something else", isFile)
+        step.matches("pre-suf")
+        step.matches("PRE-SUF")
+        step.matches("Pre-Suf")
+        !step.matches("PRE")
+        !step.matches("SUF")
+        !step.matches("PRSU")
+        !step.matches("")
+        !step.matches("something else")
+    }
 
-        where:
-        isFile << [true, false]
+
+    @Issue("GRADLE-3418")
+    def "doesn't match if pre and suf are the same"() {
+        def step = new HasPrefixAndSuffixPatternStep("pat", "pat", CASE_SENSITIVE)
+
+        expect:
+        step.matches("patpat")
+        step.matches("pat-pat")
+        !step.matches("")
+        !step.matches("pat")
     }
 }

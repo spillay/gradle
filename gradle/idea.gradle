@@ -5,6 +5,10 @@ allprojects {
 
     idea {
         module {
+            // Force everything to Java 6, pending detangling some int test cycles or switching to project-per-source-set mapping
+            languageLevel = new org.gradle.plugins.ide.idea.model.IdeaLanguageLevel("1.6")
+            targetBytecodeVersion = JavaVersion.VERSION_1_6
+
             iml {
                 whenMerged { module ->
                     module.dependencies.removeAll {
@@ -55,8 +59,6 @@ idea {
     project {
         wildcards += ['?*.gradle']
 
-        languageLevel = '1.6'
-
         vcs = 'Git'
         ipr {
             withXml { provider ->
@@ -83,15 +85,6 @@ idea {
                                 exclude.appendNode('directory', [url: "file://\$PROJECT_DIR\$/${rootProject.relativePath(packageFolder)}", includeSubdirectories: true])
                             }
                         }
-                    }
-                }
-                Collection sourceDirs = groovyProjects.collect { project -> project.sourceSets*.allSource*.srcDirs }.flatten()
-                sourceDirs.each { sourceFolder ->
-                    if (!javaVersion.java7Compatible) {
-                        excludeSource("jdk7", sourceFolder)
-                    }
-                    if (!javaVersion.java6Compatible) {
-                        excludeSource("jdk6", sourceFolder)
                     }
                 }
 
@@ -149,6 +142,7 @@ idea {
             <option name="PER_PROJECT_SETTINGS">
               <value>
                 <option name="USE_SAME_INDENTS" value="true" />
+                <option name="CLASS_COUNT_TO_USE_IMPORT_ON_DEMAND" value="999" />
                 <option name="RIGHT_MARGIN" value="200" />
                 <option name="JD_ALIGN_PARAM_COMMENTS" value="false" />
                 <option name="JD_ALIGN_EXCEPTION_COMMENTS" value="false" />
@@ -170,6 +164,7 @@ idea {
                 </codeStyleSettings>
                 <GroovyCodeStyleSettings>
                   <option name="ALIGN_NAMED_ARGS_IN_MAP" value="false" />
+                  <option name="CLASS_COUNT_TO_USE_IMPORT_ON_DEMAND" value="999" />
                 </GroovyCodeStyleSettings>
               </value>
             </option>
@@ -214,12 +209,20 @@ idea {
         def defaultTestVmParams = [
                 "-Dorg.gradle.docs.releasenotes.source=${docsProject.releaseNotesMarkdown.source.singleFile}",
                 "-Dorg.gradle.docs.releasenotes.rendered=${new File(docsProject.releaseNotes.destinationDir, docsProject.releaseNotes.fileName)}",
-                "-DintegTest.gradleHomeDir=${intTestImage.destinationDir}",
+                "-DintegTest.gradleHomeDir=${rootProject.intTestImage.destinationDir.absolutePath}",
+                "-DintegTest.gradleUserHomeDir=${rootProject.file('intTestHomeDir').absolutePath}",
+                "-DintegTest.libsRepo=${rootProject.file('build/repo').absolutePath}",
+                "-Dorg.gradle.integtest.daemon.registry=${rootProject.file('build/daemon').absolutePath}",
+                "-DintegTest.distsDir=${rootProject.distsDir.absolutePath}",
                 "-Dorg.gradle.integtest.executer=embedded",
+                "-Dorg.gradle.integtest.versions=latest",
                 "-ea",
-                "-XX:MaxPermSize=512m",
                 "-Xmx512m"
         ]
+
+        if (!javaVersion.java8Compatible) {
+            defaultTestVmParams += "-XX:MaxPermSize=512m"
+        }
 
         vmParameters.'@value' = defaultTestVmParams.collect { it.contains(" ") ? "\"$it\"" : it }.join(" ")
 
@@ -293,10 +296,23 @@ idea {
             listItems << "<item index='${listItems.size() + 1}' class='java.lang.String' itemvalue='Application.${runnerName}' />"
         }
 
+        // Add remote debugger configuration
+        runManagerConfig.append(new XmlParser().parseText("""
+            <configuration default="false" name="Remote debug port 5005" type="Remote" factoryName="Remote">
+              <option name="USE_SOCKET_TRANSPORT" value="true" />
+              <option name="SERVER_MODE" value="false" />
+              <option name="SHMEM_ADDRESS" value="javadebug" />
+              <option name="HOST" value="localhost" />
+              <option name="PORT" value="5005" />
+              <method />
+            </configuration>
+        """))
+        listItems << "<item index='${listItems.size() + 1}' class='java.lang.String' itemvalue='Remote.Remote debug port 5005' />"
+
         runManagerConfig.append(new XmlParser().parseText("""
             <list size='${listItems.size() + 1}'>
               <item index='0' class='java.lang.String' itemvalue='Application.Gradle' />
-              ${listItems}
+              ${listItems.join('\n')}
             </list>
         """))
     }

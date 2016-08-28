@@ -51,6 +51,7 @@ class CustomComponentIntegrationTest extends AbstractIntegrationSpec {
                 void createValidateTask(ModelMap<Task> tasks, ComponentSpecContainer components) {
                     tasks.create("validate") {
                         assert components*.name == ["sampleLib"]
+                        assert components.withType(ModelElement)*.name == ["sampleLib"]
                         assert components.withType(ComponentSpec)*.name == ["sampleLib"]
                         assert components.withType($componentSpecType)*.name == ["sampleLib"]
                         assert components.withType(SampleComponentSpec)*.name == ["sampleLib"]
@@ -65,7 +66,7 @@ class CustomComponentIntegrationTest extends AbstractIntegrationSpec {
         succeeds "validate"
 
         where:
-        componentSpecType << [ComponentSpec, SourceComponentSpec, VariantComponentSpec, GeneralComponentSpec, LibrarySpec, ApplicationSpec]*.simpleName
+        componentSpecType << [ComponentSpec, SourceComponentSpec, GeneralComponentSpec, LibrarySpec, ApplicationSpec]*.simpleName
     }
 
     def "presents a public view for custom managed ApplicationSpec"() {
@@ -87,12 +88,14 @@ class CustomComponentIntegrationTest extends AbstractIntegrationSpec {
                 components {
                     sampleLib(SampleComponentSpec) {
                         assert it instanceof SampleComponentSpec
+                        assert it.name == 'sampleLib'
                         assert it.displayName == "SampleComponentSpec 'sampleLib'"
                         assert it.toString() == "SampleComponentSpec 'sampleLib'"
                         publicData = "public"
                     }
                     sampleLib {
                         assert it instanceof SampleComponentSpec
+                        assert it.name == 'sampleLib'
                         assert it.displayName == "SampleComponentSpec 'sampleLib'"
                         assert it.toString() == "SampleComponentSpec 'sampleLib'"
                         publicData = "modified"
@@ -103,6 +106,42 @@ class CustomComponentIntegrationTest extends AbstractIntegrationSpec {
 
         expect:
         succeeds "model"
+    }
+
+    def "can view a component as a ModelElement"() {
+        buildFile << """
+            @Managed
+            interface SampleComponentSpec extends ApplicationSpec {
+                String getPublicData()
+                void setPublicData(String publicData)
+            }
+
+            class RegisterComponentRules extends RuleSource {
+                @ComponentType
+                void register(TypeBuilder<SampleComponentSpec> builder) {
+                }
+                @Mutate
+                void tasks(ModelMap<Task> tasks, @Path("components.sampleLib") ModelElement lib) {
+                    tasks.create("test") {
+                        doLast {
+                            assert lib.name == "sampleLib"
+                            assert lib.displayName == "SampleComponentSpec 'sampleLib'"
+                            assert lib.toString() == lib.displayName
+                        }
+                    }
+                }
+            }
+            apply plugin: RegisterComponentRules
+
+            model {
+                components {
+                    sampleLib(SampleComponentSpec)
+                }
+            }
+        """
+
+        expect:
+        succeeds "test"
     }
 
     @Unroll
@@ -144,7 +183,7 @@ class CustomComponentIntegrationTest extends AbstractIntegrationSpec {
         succeeds "validate"
 
         where:
-        componentSpecType << [VariantComponentSpec, GeneralComponentSpec, LibrarySpec, ApplicationSpec]*.simpleName
+        componentSpecType << [GeneralComponentSpec, LibrarySpec, ApplicationSpec]*.simpleName
     }
 
     @Unroll
@@ -254,12 +293,14 @@ class CustomComponentIntegrationTest extends AbstractIntegrationSpec {
                 components {
                     sampleLib(UnmanagedComponentSpec) {
                         assert it instanceof UnmanagedComponentSpec
+                        assert it.name == "sampleLib"
                         assert it.displayName == "UnmanagedComponentSpec 'sampleLib'"
                         assert it.toString() == "UnmanagedComponentSpec 'sampleLib'"
                         unmanagedData = "unmanaged"
                     }
                     sampleLib {
                         assert it instanceof UnmanagedComponentSpec
+                        assert it.name == "sampleLib"
                         assert it.displayName == "UnmanagedComponentSpec 'sampleLib'"
                         assert it.toString() == "UnmanagedComponentSpec 'sampleLib'"
                         unmanagedData = "modified"
@@ -584,8 +625,8 @@ class CustomComponentIntegrationTest extends AbstractIntegrationSpec {
 
         expect:
         fails "components"
-        failure.assertHasCause("Exception thrown while executing model rule: Broken#broken")
-        failure.assertHasCause("Broken#broken is not a valid component model rule method.")
+        failure.assertHasCause("Exception thrown while executing model rule: Broken#broken(TypeBuilder<BrokenComponentSpec>)")
+        failure.assertHasCause("Broken#broken(TypeBuilder<BrokenComponentSpec>) is not a valid component model rule method.")
         failure.assertHasCause("Internal view java.lang.String must be an interface.")
     }
 

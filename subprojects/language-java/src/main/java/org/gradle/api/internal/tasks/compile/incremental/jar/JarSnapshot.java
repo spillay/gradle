@@ -16,9 +16,13 @@
 
 package org.gradle.api.internal.tasks.compile.incremental.jar;
 
-import org.gradle.api.internal.tasks.compile.incremental.deps.*;
+import com.google.common.hash.HashCode;
+import org.gradle.api.internal.tasks.compile.incremental.deps.AffectedClasses;
+import org.gradle.api.internal.tasks.compile.incremental.deps.ClassSetAnalysis;
+import org.gradle.api.internal.tasks.compile.incremental.deps.DefaultDependentsSet;
+import org.gradle.api.internal.tasks.compile.incremental.deps.DependencyToAll;
+import org.gradle.api.internal.tasks.compile.incremental.deps.DependentsSet;
 
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -33,7 +37,7 @@ public class JarSnapshot {
 
     public DependentsSet getAllClasses() {
         final Set<String> result = new HashSet<String>();
-        for (Map.Entry<String, byte[]> cls : getHashes().entrySet()) {
+        for (Map.Entry<String, HashCode> cls : getHashes().entrySet()) {
             String className = cls.getKey();
             if (getAnalysis().isDependencyToAll(className)) {
                 return new DependencyToAll();
@@ -51,11 +55,11 @@ public class JarSnapshot {
 
     private DependentsSet affectedSince(JarSnapshot other) {
         final Set<String> affected = new HashSet<String>();
-        for (Map.Entry<String, byte[]> otherClass : other.getHashes().entrySet()) {
+        for (Map.Entry<String, HashCode> otherClass : other.getHashes().entrySet()) {
             String otherClassName = otherClass.getKey();
-            byte[] otherClassBytes = otherClass.getValue();
-            byte[] thisClsBytes = getHashes().get(otherClassName);
-            if (thisClsBytes == null || !Arrays.equals(thisClsBytes, otherClassBytes)) {
+            HashCode otherClassBytes = otherClass.getValue();
+            HashCode thisClsBytes = getHashes().get(otherClassName);
+            if (thisClsBytes == null || !thisClsBytes.equals(otherClassBytes)) {
                 //removed since or changed since
                 affected.add(otherClassName);
                 DependentsSet dependents = other.getAnalysis().getRelevantDependents(otherClassName);
@@ -74,11 +78,11 @@ public class JarSnapshot {
         return addedClasses;
     }
 
-    public byte[] getHash() {
+    public HashCode getHash() {
         return data.hash;
     }
 
-    public Map<String, byte[]> getHashes() {
+    public Map<String, HashCode> getHashes() {
         return data.hashes;
     }
 

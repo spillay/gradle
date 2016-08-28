@@ -23,11 +23,13 @@ import org.gradle.internal.id.UUIDGenerator;
 import org.gradle.internal.serialize.Serializers;
 import org.gradle.launcher.daemon.protocol.DaemonMessageSerializer;
 import org.gradle.launcher.daemon.protocol.Message;
-import org.gradle.messaging.remote.Address;
-import org.gradle.messaging.remote.ConnectionAcceptor;
-import org.gradle.messaging.remote.internal.*;
-import org.gradle.messaging.remote.internal.inet.InetAddressFactory;
-import org.gradle.messaging.remote.internal.inet.TcpIncomingConnector;
+import org.gradle.internal.remote.Address;
+import org.gradle.internal.remote.ConnectionAcceptor;
+import org.gradle.internal.remote.internal.ConnectCompletion;
+import org.gradle.internal.remote.internal.IncomingConnector;
+import org.gradle.internal.remote.internal.RemoteConnection;
+import org.gradle.internal.remote.internal.inet.InetAddressFactory;
+import org.gradle.internal.remote.internal.inet.TcpIncomingConnector;
 
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -66,10 +68,9 @@ public class DaemonTcpServerConnector implements DaemonServerConnector {
 
             Action<ConnectCompletion> connectEvent = new Action<ConnectCompletion>() {
                 public void execute(ConnectCompletion completion) {
-                    MessageSerializer<Message> serializer = new KryoBackedMessageSerializer<Message>(Serializers.stateful(DaemonMessageSerializer.create()));
                     RemoteConnection<Message> remoteConnection;
                     try {
-                        remoteConnection = completion.create(serializer);
+                        remoteConnection = completion.create(Serializers.stateful(DaemonMessageSerializer.create()));
                     } catch (UncheckedIOException e) {
                         connectionErrorHandler.run();
                         throw e;

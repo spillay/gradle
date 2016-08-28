@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package org.gradle.api.publish.maven.internal.publication
-
 import org.gradle.api.Action
 import org.gradle.api.InvalidUserDataException
 import org.gradle.api.Task
@@ -31,14 +30,15 @@ import org.gradle.api.publish.maven.internal.publisher.MavenProjectIdentity
 import org.gradle.api.tasks.TaskDependency
 import org.gradle.internal.reflect.DirectInstantiator
 import org.gradle.internal.typeconversion.NotationParser
-import org.gradle.test.fixtures.file.TestDirectoryProvider
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
-import spock.lang.Shared
+import org.junit.Rule
 import spock.lang.Specification
 
 public class DefaultMavenPublicationTest extends Specification {
-    @Shared TestDirectoryProvider testDirectoryProvider = new TestNameTestDirectoryProvider()
+    @Rule
+    final TestNameTestDirectoryProvider testDirectoryProvider = new TestNameTestDirectoryProvider()
+
     def module = Mock(MavenProjectIdentity)
     NotationParser<Object, MavenArtifact> notationParser = Mock(NotationParser)
     def projectDependencyResolver = Mock(ProjectDependencyPublicationResolver)
@@ -202,6 +202,7 @@ public class DefaultMavenPublicationTest extends Specification {
         moduleDependency.version >> "version"
         moduleDependency.artifacts >> [artifact]
         moduleDependency.excludeRules >> [excludeRule]
+        moduleDependency.transitive >> true
 
         and:
         publication.from(componentWithDependency(moduleDependency))
@@ -214,6 +215,38 @@ public class DefaultMavenPublicationTest extends Specification {
             version == "version"
             artifacts == [artifact]
             excludeRules == [excludeRule]
+        }
+    }
+
+    def "adopts non-transitive module dependency from added component"() {
+        given:
+        def publication = createPublication()
+        def moduleDependency = Mock(ModuleDependency)
+        def artifact = Mock(DependencyArtifact)
+        def excludeRule = Mock(ExcludeRule)
+
+        when:
+        moduleDependency.group >> "group"
+        moduleDependency.name >> "name"
+        moduleDependency.version >> "version"
+        moduleDependency.artifacts >> [artifact]
+        moduleDependency.excludeRules >> [excludeRule]
+        moduleDependency.transitive >> false
+
+        and:
+        publication.from(componentWithDependency(moduleDependency))
+
+        then:
+        publication.runtimeDependencies.size() == 1
+        with (publication.runtimeDependencies.asList().first()) {
+                groupId == "group"
+                artifactId == "name"
+                version == "version"
+                artifacts == [artifact]
+                excludeRules != [excludeRule]
+                excludeRules.size() == 1
+                excludeRules[0].group == '*'
+                excludeRules[0].module == '*'
         }
     }
 

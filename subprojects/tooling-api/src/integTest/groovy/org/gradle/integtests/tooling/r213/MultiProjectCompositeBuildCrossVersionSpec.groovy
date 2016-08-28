@@ -15,45 +15,18 @@
  */
 
 package org.gradle.integtests.tooling.r213
-
 import groovy.transform.NotYetImplemented
 import org.gradle.integtests.tooling.fixture.CompositeToolingApiSpecification
-import org.gradle.tooling.BuildException
+import org.gradle.tooling.GradleConnectionException
 import org.gradle.tooling.model.eclipse.EclipseProject
-
 /**
  * Tests composites with multiple participants.  All participants have the same version.
  */
 class MultiProjectCompositeBuildCrossVersionSpec extends CompositeToolingApiSpecification {
     def "can create composite of a two multi-project builds"() {
         given:
-        def multiBuild1 = populate("multi-build-1") {
-            buildFile << """
-                allprojects {
-                    apply plugin: 'java'
-                    group = 'group'
-                    version = '1.0'
-                }
-"""
-            settingsFile << """
-                rootProject.name = '${rootProjectName}'
-                include 'a1', 'b1', 'c1'
-"""
-        }
-
-        def multiBuild2 = populate("multi-build-2") {
-            buildFile << """
-                allprojects {
-                    apply plugin: 'java'
-                    group = 'group'
-                    version = '1.0'
-                }
-"""
-            settingsFile << """
-                rootProject.name = '${rootProjectName}'
-                include 'a2', 'b2', 'c2'
-"""
-        }
+        def multiBuild1 = multiProjectBuild("multi-build-1", ['a1', 'b1', 'c1'])
+        def multiBuild2 = multiProjectBuild("multi-build-2", ['a2', 'b2', 'c2'])
 
         when:
         def models = withCompositeConnection([ multiBuild1, multiBuild2 ]) { connection ->
@@ -67,31 +40,8 @@ class MultiProjectCompositeBuildCrossVersionSpec extends CompositeToolingApiSpec
 
     def "failures from multiple builds is still seen as a single failure of the composite"() {
         given:
-        def singleBuild1 = populate("single-build-1") {
-            buildFile << """
-                allprojects {
-                    apply plugin: 'java'
-                    group = 'group'
-                    version = '1.0'
-                }
-"""
-            settingsFile << """
-                rootProject.name = '${rootProjectName}'
-"""
-        }
-
-        def singleBuild2 = populate("single-build-2") {
-            buildFile << """
-                allprojects {
-                    apply plugin: 'java'
-                    group = 'group'
-                    version = '1.0'
-                }
-"""
-            settingsFile << """
-                rootProject.name = '${rootProjectName}'
-"""
-        }
+        def singleBuild1 = singleProjectBuild("single-build-1")
+        def singleBuild2 = singleProjectBuild("single-build-2")
 
         when:
         def models = withCompositeConnection([ singleBuild1, singleBuild2 ]) { connection ->
@@ -107,31 +57,8 @@ class MultiProjectCompositeBuildCrossVersionSpec extends CompositeToolingApiSpec
     @NotYetImplemented
     def "fails when two projects becoming overlapping projects"() {
         given:
-        def singleBuild1 = populate("single-build-1") {
-            buildFile << """
-                allprojects {
-                    apply plugin: 'java'
-                    group = 'group'
-                    version = '1.0'
-                }
-"""
-            settingsFile << """
-                rootProject.name = '${rootProjectName}'
-"""
-        }
-
-        def singleBuild2 = populate("single-build-2") {
-            buildFile << """
-                allprojects {
-                    apply plugin: 'java'
-                    group = 'group'
-                    version = '1.0'
-                }
-"""
-            settingsFile << """
-                rootProject.name = '${rootProjectName}'
-"""
-        }
+        def singleBuild1 = singleProjectBuild("single-build-1")
+        def singleBuild2 = singleProjectBuild("single-build-2")
 
         def connection = createComposite(singleBuild1, singleBuild2)
 
@@ -160,32 +87,8 @@ class MultiProjectCompositeBuildCrossVersionSpec extends CompositeToolingApiSpec
 
     def "can create composite of a single-project and multi-project builds"() {
         given:
-        def singleBuild = populate("single-build-1") {
-            buildFile << """
-                allprojects {
-                    apply plugin: 'java'
-                    group = 'group'
-                    version = '1.0'
-                }
-"""
-            settingsFile << """
-                rootProject.name = '${rootProjectName}'
-"""
-        }
-
-        def multiBuild = populate("multi-build-1") {
-            buildFile << """
-                allprojects {
-                    apply plugin: 'java'
-                    group = 'group'
-                    version = '1.0'
-                }
-"""
-            settingsFile << """
-                rootProject.name = '${rootProjectName}'
-                include 'a1', 'b1', 'c1'
-"""
-        }
+        def singleBuild = singleProjectBuild("single-build-1")
+        def multiBuild = multiProjectBuild("multi-build-1", ['a1', 'b1', 'c1'])
 
         when:
         def models = withCompositeConnection([ singleBuild, multiBuild ]) { connection ->
@@ -199,31 +102,8 @@ class MultiProjectCompositeBuildCrossVersionSpec extends CompositeToolingApiSpec
 
     def "sees changes to composite build when projects are added"() {
         given:
-        def singleBuild = populate("single-build") {
-            buildFile << """
-                allprojects {
-                    apply plugin: 'java'
-                    group = 'group'
-                    version = '1.0'
-                }
-"""
-            settingsFile << """
-                rootProject.name = '${rootProjectName}'
-"""
-        }
-        def multiBuild = populate("multi-build-1") {
-            buildFile << """
-                allprojects {
-                    apply plugin: 'java'
-                    group = 'group'
-                    version = '1.0'
-                }
-"""
-            settingsFile << """
-                rootProject.name = '${rootProjectName}'
-                include 'a1', 'b1', 'c1'
-"""
-        }
+        def singleBuild = singleProjectBuild("single-build")
+        def multiBuild = multiProjectBuild("multi-build-1", ['a1', 'b1', 'c1'])
         def composite = createComposite(singleBuild, multiBuild)
 
         when:
@@ -270,14 +150,10 @@ class MultiProjectCompositeBuildCrossVersionSpec extends CompositeToolingApiSpec
         def fourthRetrieval = unwrap(composite.getModels(EclipseProject))
 
         then:
-        def e = thrown(BuildException)
-        def causes = getCausalChain(e)
-        causes.any {
-            it.message.contains("Could not fetch models of type 'EclipseProject'")
-        }
-        causes.any {
-            it.message.contains("single-build' does not exist")
-        }
+        def e = thrown(GradleConnectionException)
+        assertFailure(e,
+            integratedComposite ? "Could not fetch models of type 'EclipseProject'" : "Could not fetch model of type 'EclipseProject'",
+            "single-build' does not exist")
 
         cleanup:
         composite?.close()

@@ -17,8 +17,6 @@
 package org.gradle.jvm.test
 
 import org.gradle.api.reporting.components.AbstractComponentReportIntegrationTest
-import org.gradle.util.Requires
-import org.gradle.util.TestPrecondition
 
 class JUnitTestSuiteComponentReportIntegrationTest extends AbstractComponentReportIntegrationTest {
     def setup() {
@@ -51,7 +49,7 @@ class JUnitTestSuiteComponentReportIntegrationTest extends AbstractComponentRepo
         succeeds "components"
 
         then:
-        outputMatches output, """
+        outputMatches """
 JUnit test suite 'test'
 -----------------------
 
@@ -92,7 +90,7 @@ model {
         succeeds "components"
 
         then:
-        outputMatches output, """
+        outputMatches """
 JUnit test suite 'functionalTest'
 ---------------------------------
 
@@ -153,7 +151,7 @@ Binaries
         succeeds "components"
 
         then:
-        outputMatches output, """
+        outputMatches """
 JVM library 'main'
 ------------------
 
@@ -196,7 +194,6 @@ Binaries
 """
     }
 
-    @Requires(TestPrecondition.JDK7_OR_LATER)
     def "shows details of test suite with component under test with multiple variants"() {
         given:
         buildFile << '''
@@ -220,7 +217,7 @@ Binaries
         succeeds "components"
 
         then:
-        outputMatches output, """
+        outputMatches """
 JVM library 'main'
 ------------------
 

@@ -18,18 +18,22 @@ package org.gradle.plugins.ide.idea
 import org.gradle.api.JavaVersion
 import org.gradle.api.Project
 import org.gradle.api.Task
-import org.gradle.api.internal.project.DefaultProject
+import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.plugins.scala.ScalaPlugin
 import org.gradle.api.tasks.Delete
 import org.gradle.plugins.ide.idea.model.IdeaLanguageLevel
+import org.gradle.test.fixtures.AbstractProjectBuilderSpec
 import org.gradle.util.TestUtil
-import spock.lang.Specification
 
-class IdeaPluginTest extends Specification {
-    private final DefaultProject project = TestUtil.createRootProject()
-    private final DefaultProject childProject = TestUtil.createChildProject(project, "child", new File("."))
-    private final DefaultProject anotherChildProject = TestUtil.createChildProject(project, "child2", new File("."))
+class IdeaPluginTest extends AbstractProjectBuilderSpec {
+    private ProjectInternal childProject
+    private ProjectInternal anotherChildProject
+
+    def setup() {
+        childProject = TestUtil.createChildProject(project, "child", new File("."))
+        anotherChildProject = TestUtil.createChildProject(project, "child2", new File("."))
+    }
 
     def "adds 'ideaProject' task to root project"() {
         when:
@@ -53,7 +57,7 @@ class IdeaPluginTest extends Specification {
         applyPluginToProjects()
 
         then:
-        project.idea.project.wildcards == ['!?*.java', '!?*.groovy'] as Set
+        project.idea.project.wildcards == ['!?*.java', '!?*.groovy', '!?*.class', '!?*.scala'] as Set
         project.idea.project.languageLevel.level ==  new IdeaLanguageLevel(JavaVersion.VERSION_1_6).level
     }
 

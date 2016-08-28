@@ -74,7 +74,7 @@ task printSystemProp << {
 
     def "build property set on command line takes precedence over jvm args"() {
         when:
-        executer.requireGradleHome()
+        executer.requireGradleDistribution()
         executer.withEnvironmentVars 'GRADLE_OPTS': '-Dorg.gradle.configureondemand=true'
 
         buildFile << """
@@ -99,7 +99,7 @@ task assertCodDisabled << {
 
     def "system property set on command line takes precedence over jvm args"() {
         given:
-        executer.requireGradleHome()
+        executer.requireGradleDistribution()
         executer.withEnvironmentVars 'GRADLE_OPTS': '-DmySystemProp=jvmarg'
 
         buildFile << """
@@ -119,5 +119,24 @@ task printSystemProp << {
 
         then:
         result.assertOutputContains('mySystemProp=commandline')
+    }
+
+    def "handles properties which are not String when calling GradleBuild"() {
+        given:
+        executer.requireGradleDistribution()
+        buildFile << """
+            task buildInBuild(type:GradleBuild) {
+                buildFile = 'other.gradle'
+                startParameter.searchUpwards = false
+                startParameter.projectProperties['foo'] = true // not a String
+            }
+        """
+        file('other.gradle') << 'assert foo==true'
+
+        when:
+        run 'buildInBuild'
+
+        then:
+        noExceptionThrown()
     }
 }

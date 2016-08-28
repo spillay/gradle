@@ -15,19 +15,16 @@
  */
 package org.gradle.api.plugins.quality
 
-import org.gradle.api.internal.project.DefaultProject
 import org.gradle.api.plugins.JavaBasePlugin
 import org.gradle.api.plugins.ReportingBasePlugin
 import org.gradle.api.tasks.SourceSet
-import org.gradle.util.TestUtil
-import spock.lang.Specification
+import org.gradle.test.fixtures.AbstractProjectBuilderSpec
 
 import static org.gradle.api.tasks.TaskDependencyMatchers.dependsOn
 import static org.hamcrest.Matchers.*
 import static spock.util.matcher.HamcrestSupport.that
 
-class PmdPluginTest extends Specification {
-    DefaultProject project = TestUtil.createRootProject()
+class PmdPluginTest extends AbstractProjectBuilderSpec {
 
     def setup() {
         project.pluginManager.apply(PmdPlugin)
@@ -214,7 +211,9 @@ class PmdPluginTest extends Specification {
         project.sourceSets {
             main
         }
+        def mainSourceSet = project.sourceSets.main
+        def pmdTask = project.tasks.getByName("pmdMain")
         expect:
-        project.tasks.getByName("pmdMain").classpath == project.sourceSets.main.compileClasspath
+        pmdTask.classpath.files == (mainSourceSet.output + mainSourceSet.compileClasspath).files
     }
 }

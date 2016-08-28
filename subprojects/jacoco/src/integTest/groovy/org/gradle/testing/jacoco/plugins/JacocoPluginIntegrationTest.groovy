@@ -20,8 +20,11 @@ import org.gradle.api.Project
 import org.gradle.api.reporting.ReportingExtension
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
+import org.gradle.util.Requires
 import spock.lang.IgnoreIf
 import spock.lang.Issue
+
+import static org.gradle.util.TestPrecondition.FIX_TO_WORK_ON_JAVA9
 
 class JacocoPluginIntegrationTest extends AbstractIntegrationSpec {
 
@@ -43,6 +46,23 @@ class JacocoPluginIntegrationTest extends AbstractIntegrationSpec {
             }
         """
         createTestFiles()
+    }
+
+    def "jacoco plugin adds coverage report for test task when java plugin applied"() {
+        given:
+        buildFile << '''
+            task doCheck {
+                doLast {
+                    assert project.test.extensions.getByType(JacocoTaskExtension) != null
+                    assert project.jacocoTestReport instanceof JacocoReport
+                    assert project.jacocoTestReport.sourceDirectories*.absolutePath == project.files("src/main/java")*.absolutePath
+                    assert project.jacocoTestReport.classDirectories == project.sourceSets.main.output
+                }
+            }
+        '''.stripIndent()
+
+        expect:
+        succeeds 'doCheck'
     }
 
     def "dependencies report shows default jacoco dependencies"() {
@@ -70,6 +90,7 @@ class JacocoPluginIntegrationTest extends AbstractIntegrationSpec {
         then: output.contains "org.jacoco:org.jacoco.ant:0.6.0.201210061924"
     }
 
+    @Requires(FIX_TO_WORK_ON_JAVA9)
     void generatesHtmlReportOnlyAsDefault() {
         when:
         succeeds('test', 'jacocoTestReport')
@@ -82,6 +103,7 @@ class JacocoPluginIntegrationTest extends AbstractIntegrationSpec {
         htmlReport().totalCoverage() == 100
     }
 
+    @Requires(FIX_TO_WORK_ON_JAVA9)
     void canConfigureReportsInJacocoTestReport() {
         given:
         buildFile << """
@@ -103,6 +125,7 @@ class JacocoPluginIntegrationTest extends AbstractIntegrationSpec {
         file(REPORT_CSV_DEFAULT_REPORT).exists()
     }
 
+    @Requires(FIX_TO_WORK_ON_JAVA9)
     void respectsReportingBaseDir() {
         given:
         buildFile << """
@@ -123,6 +146,7 @@ class JacocoPluginIntegrationTest extends AbstractIntegrationSpec {
         file("build/customReports/jacoco/test/jacocoTestReport.csv").exists()
     }
 
+    @Requires(FIX_TO_WORK_ON_JAVA9)
     void canConfigureReportDirectory() {
         given:
         def customReportDirectory = "customJacocoReportDir"
@@ -146,8 +170,9 @@ class JacocoPluginIntegrationTest extends AbstractIntegrationSpec {
     }
 
     @IgnoreIf({GradleContextualExecuter.parallel})
+    @Requires(FIX_TO_WORK_ON_JAVA9)
     void jacocoReportIsIncremental() {
-        def reportResourceDir = file("${REPORTING_BASE}/jacoco/test/html/.resources")
+        def reportResourceDir = file("${REPORTING_BASE}/jacoco/test/html/jacoco-resources")
 
         when:
         succeeds('test', 'jacocoTestReport')
@@ -182,6 +207,7 @@ class JacocoPluginIntegrationTest extends AbstractIntegrationSpec {
     }
 
     @IgnoreIf({GradleContextualExecuter.parallel})
+    @Requires(FIX_TO_WORK_ON_JAVA9)
     void canUseCoverageDataFromPreviousRunForCoverageReport() {
         when:
         succeeds('jacocoTestReport')
@@ -202,6 +228,7 @@ class JacocoPluginIntegrationTest extends AbstractIntegrationSpec {
     }
 
     @IgnoreIf({GradleContextualExecuter.parallel})
+    @Requires(FIX_TO_WORK_ON_JAVA9)
     void canMergeCoverageData() {
         given:
         file("src/otherMain/java/Thing.java") << """
@@ -226,7 +253,6 @@ public class ThingTest {
 
             task otherTests(type: Test) {
                 binResultsDir file("bin")
-                testSrcDirs = sourceSets.otherTest.java.srcDirs as List
                 testClassesDir = sourceSets.otherTest.output.classesDir
                 classpath = sourceSets.otherTest.runtimeClasspath
             }
@@ -254,10 +280,41 @@ public class ThingTest {
     }
 
     @Issue("GRADLE-2917")
+    @Requires(FIX_TO_WORK_ON_JAVA9)
     void "configures default jacoco dependencies even if the configuration was resolved before"() {
         expect:
         //dependencies task forces resolution of the configurations
         succeeds "dependencies", "test", "jacocoTestReport"
+    }
+
+    @Issue("GRADLE-3498")
+    @Requires(FIX_TO_WORK_ON_JAVA9)
+    void "can use different execution data"() {
+        setup:
+        buildFile << """
+        test {
+            jacoco {
+                append = false
+                destinationFile = file("\$buildDir/tmp/jacoco/jacocoTest.exec")
+                classDumpFile = file("\$buildDir/tmp/jacoco/classpathdumps")
+            }
+        }
+
+        jacocoTestReport {
+            reports {
+                xml.enabled false
+                csv.enabled false
+                html.destination "\${buildDir}/reports/jacoco/integ"
+            }
+            executionData test
+        }
+        """.stripIndent()
+
+        when:
+        succeeds 'test', 'jacocoTestReport'
+
+        then:
+        ':jacocoTestReport' in nonSkippedTasks
     }
 
     private JacocoReportFixture htmlReport(String basedir = "${REPORTING_BASE}/jacoco/test/html") {

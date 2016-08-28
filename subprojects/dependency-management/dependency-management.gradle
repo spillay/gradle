@@ -1,5 +1,7 @@
 apply plugin: "groovy"
 
+sourceCompatibility = 1.6
+
 configurations {
     mvn3Input
 }
@@ -17,8 +19,10 @@ dependencies {
     compile libraries.ivy
     compile libraries.slf4j_api
     compile libraries.gson
+
     runtime libraries.xbean //maven3 classes dependency
     runtime libraries.bouncycastle_provider
+    runtime project(":installationBeacon")
 
     compile libraries.maven3
 
@@ -35,9 +39,34 @@ dependencies {
     testFixturesCompile project(":internalIntegTesting")
 }
 
-if (isWindows && javaVersion.java5) {
-    compileTestGroovy.options.fork(memoryMaximumSize: '512m')
-}
-
 useTestFixtures()
 useTestFixtures(project: ":messaging")
+
+verifyTestFilesCleanup.errorWhenNotEmpty = false
+
+ext.runtimeShadedPath = "$buildDir/generated-resources/main/org/gradle/api/internal/runtimeshaded"
+
+task generateGradleApiPackageList(type: org.gradle.api.internal.runtimeshaded.PackageListGenerator) {
+    outputFile = file("$runtimeShadedPath/api-relocated.txt")
+    // todo: find away to workaround the circular dependency in a cleaner way
+    classpath = files([])
+    doFirst {
+        classpath = files(
+            rootProject.configurations.externalModules,
+            [':core', ':dependencyManagement', ':pluginUse', ":toolingApi"].collect() {
+                project(it).configurations.runtime
+            }, project(':').configurations.gradlePlugins)
+    }
+}
+
+task generateTestKitPackageList(type: org.gradle.api.internal.runtimeshaded.PackageListGenerator) {
+    outputFile = file("$runtimeShadedPath/test-kit-relocated.txt")
+    // todo: find away to workaround the circular dependency in a cleaner way
+    classpath = files([])
+    doFirst {
+        classpath = project(':testKit').configurations.compile
+    }
+}
+
+jar.dependsOn(generateGradleApiPackageList, generateTestKitPackageList)
+

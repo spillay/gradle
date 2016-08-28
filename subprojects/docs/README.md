@@ -1,5 +1,5 @@
 The docs project produces the [userguide](http://gradle.org/docs/current/userguide/userguide.html), [DSL reference](http://gradle.org/docs/current/dsl/),
-[javadoc](http://gradle.org/docs/current/javadoc/), [groovydoc](http://gradle.org/docs/current/groovydoc/) and [release notes](http://gradle.org/docs/current/release-notes)
+[javadoc](http://gradle.org/docs/current/javadoc/) and [release notes](http://gradle.org/docs/current/release-notes)
 (as well as some other minor bits).
 
 The following is some help for working with the docs, all file paths are relative to this directory unless specified otherwise.
@@ -40,7 +40,7 @@ You can run the `editReleaseNotes` task to open the raw markdown notes in whatev
 
 ## Userguide
 
-The source for the userguide lives @ `src/docs/userguide`. The userguide is authored using [docbook](http://www.docbook.org/) and uses [docbook stylesheets](http://docbook.sourceforge.net/) with some customizations in `src/stylesheets` to generate HTML. It uses [Flying Saucer](http://code.google.com/p/flying-saucer/) + [iText](http://www.lowagie.com/iText/) to generate the PDF from the HTML.
+The source for the userguide lives @ `src/docs/userguide`. The userguide is authored using [docbook](http://www.docbook.org/) and uses [docbook stylesheets](http://docbook.sourceforge.net/) with some customizations in `src/stylesheets` to generate HTML. It uses [Flying Saucer](https://github.com/flyingsaucerproject/flyingsaucer) + [iText](http://www.lowagie.com/iText/) to generate the PDF from the HTML.
 
 When adding new content, it's generally best to find an example of the kind of content that you want to add somewhere else in the userguide and copy it.
 
@@ -71,9 +71,7 @@ This is an inline element which adds a link to the API documentation for a parti
 
     You can use the <apilink class='org.gradle.api.Project' /> interface to do stuff.
 
-    Here is a link to a groovy class: <apilink class='org.gradle.api.task.bundling.Tar' />
-
-The link will point to the DSL reference for the specified class, if available. Otherwise, it will point to the javadoc or groovydoc for the class as appropriate.
+The link will point to the DSL reference for the specified class, if available. Otherwise, it will point to the javadoc for the class.
 
 To link to a method:
 
@@ -143,15 +141,14 @@ The sample source files can contain snippets which can be included in the docume
 
 ## Reference Documentation
 
-The reference documentation (i.e. dsl, groovydoc, javadoc etc.) are extracted from the in code doc comments.
+The reference documentation (i.e. dsl, javadoc etc.) are extracted from the in code doc comments.
 
 To build these, run:
 
     ./gradlew docs:dslHtml
     ./gradlew docs:javadoc
-    ./gradlew docs:groovydoc
 
-The output is available in the `dsl`, `javadoc` and `groovydoc` directories respectively within `build/docs`.
+The output is available in the `dsl` and `javadoc` directories respectively within `build/docs`.
 
 ## Building all the docs
 

@@ -21,7 +21,7 @@
         for many of the other Gradle plugins.
     </para>
 
-    <section>
+    <section id="sec:java_usage">
         <title>Usage</title>
         <para>To use the Java plugin, include the following in your build script:</para>
         <sample id="useJavaPlugin" dir="java/quickstart" title="Using the Java plugin">
@@ -29,7 +29,7 @@
         </sample>
     </section>
 
-    <section>
+    <section id="sec:java_source_sets">
         <title>Source sets</title>
         <para>The Java plugin introduces the concept of a <firstterm>source set</firstterm>. A source set is simply a group of
             source files which are compiled and executed together. These source files may include Java source files and
@@ -49,7 +49,7 @@
         </para>
     </section>
 
-    <section>
+    <section id="sec:java_tasks">
         <title>Tasks</title>
         <para>The Java plugin adds a number of tasks to your project, as shown below.</para>
 
@@ -327,7 +327,7 @@
         </figure>
     </section>
 
-    <section>
+    <section id="sec:java_project_layout">
         <title>Project layout</title>
         <para>The Java plugin assumes the project layout shown below. None of these directories need exist or have
             anything in them. The Java plugin will compile whatever it finds, and handles anything which is missing.
@@ -347,7 +347,7 @@
             <xi:include href="javaProjectGenericLayout.xml"/>
         </table>
 
-        <section>
+        <section id="sec:changing_java_project_layout">
             <title>Changing the project layout</title>
             <para>You configure the project layout by configuring the appropriate source set. This is discussed in
                 more detail in the following sections. Here is a brief example which changes the main Java and resource
@@ -383,8 +383,14 @@
             <tr>
                 <td>compileOnly</td>
                 <td>compile</td>
-                <td>compileJava</td>
+                <td>-</td>
                 <td>Compile time only dependencies, not used at runtime</td>
+            </tr>
+            <tr>
+                <td>compileClasspath</td>
+                <td>compileOnly</td>
+                <td>compileJava</td>
+                <td>Compile classpath, used when compiling source</td>
             </tr>
             <tr>
                 <td>runtime</td>
@@ -401,8 +407,14 @@
             <tr>
                 <td>testCompileOnly</td>
                 <td>testCompile</td>
-                <td>compileTestJava</td>
+                <td>-</td>
                 <td>Additional dependencies only for compiling tests, not used at runtime</td>
+            </tr>
+            <tr>
+                <td>testCompileClasspath</td>
+                <td>testCompileOnly</td>
+                <td>compileTestJava</td>
+                <td>Test compile classpath, used when compiling test sources</td>
             </tr>
             <tr>
                 <td>testRuntime</td>
@@ -451,8 +463,14 @@
             <tr>
                 <td><literal><replaceable>sourceSet</replaceable>CompileOnly</literal></td>
                 <td><literal><replaceable>sourceSet</replaceable>Compile</literal></td>
-                <td><literal>compile<replaceable>SourceSet</replaceable>Java</literal></td>
+                <td>-</td>
                 <td>Compile time only dependencies for the given source set, not used at runtime</td>
+            </tr>
+            <tr>
+                <td><literal><replaceable>sourceSet</replaceable>CompileClasspath</literal></td>
+                <td><literal><replaceable>sourceSet</replaceable>CompileOnly</literal></td>
+                <td><literal>compile<replaceable>SourceSet</replaceable>Java</literal></td>
+                <td>Compile classpath, used when compiling source</td>
             </tr>
             <tr>
                 <td><literal><replaceable>sourceSet</replaceable>Runtime</literal></td>
@@ -463,7 +481,7 @@
         </table>
     </section>
 
-    <section>
+    <section id="sec:java_convention_properties">
         <title>Convention properties</title>
         <para>
             The Java plugin adds a number of convention properties to the project, shown below. You can use these properties
@@ -717,7 +735,7 @@
         </para>
     </section>
 
-    <section id="sec:source_sets">
+    <section id="sec:working_with_java_source_sets">
         <title>Working with source sets</title>
         <para>You can access the source sets of a project using the <literal>sourceSets</literal> property. This
             is a container for the project's source sets, of type <apilink class="org.gradle.api.tasks.SourceSetContainer"/>.
@@ -735,7 +753,7 @@
             <sourcefile file="build.gradle" snippet="define-main"/>
         </sample>
 
-        <section>
+        <section id="sec:source_set_properties">
             <title>Source set properties</title>
             <para>The following table lists some of the important properties of a source set.
                 You can find more details in the API documentation for <apilink class="org.gradle.api.tasks.SourceSet"/>.
@@ -926,7 +944,7 @@
             </table>
         </section>
 
-        <section>
+        <section id="sec:defining_new_source_sets">
             <title>Defining new source sets</title>
             <para>To define a new source set, you simply reference it in the <literal>sourceSets { }</literal> block. Here's an example:
             </para>
@@ -952,7 +970,7 @@
             </sample>
         </section>
 
-        <section>
+        <section id="sec:some_source_set_examples">
             <title>Some source set examples</title>
             <para>Adding a JAR containing the classes of a source set:</para>
             <sample id="configureSourceSet" dir="userguide/java/sourceSets" title="Assembling a JAR for a source set">
@@ -969,7 +987,7 @@
         </section>
     </section>
 
-    <section id='sec:javadoc'>
+    <section id="sec:javadoc">
         <title>Javadoc</title>
         <para>The <literal>javadoc</literal> task is an instance of <apilink class="org.gradle.api.tasks.javadoc.Javadoc"/>.
             It supports the core Javadoc options and the options of the standard doclet described in the
@@ -1016,7 +1034,7 @@
         </table>
     </section>
 
-    <section id='sec:clean'>
+    <section id="sec:clean">
         <title>Clean</title>
         <para>The <literal>clean</literal> task is an instance of <apilink class="org.gradle.api.tasks.Delete"/>. It
             simply removes the directory denoted by its <literal>dir</literal>
@@ -1041,7 +1059,7 @@
         </table>
     </section>
 
-    <section id='sec:resources'>
+    <section id="sec:java_resources">
         <title>Resources</title>
         <para>The Java plugin uses the <apilink class="org.gradle.api.tasks.Copy"/> task for resource handling. It adds an
             instance for each source set in the project. You can find out more about the copy task in
@@ -1073,7 +1091,7 @@
         </table>
     </section>
 
-    <section id='sec:compile'>
+    <section id="sec:compile">
         <title>CompileJava</title>
         <para>The Java plugin adds a <apilink class="org.gradle.api.tasks.compile.JavaCompile"/> instance for each
             source set in the project. Some of the most common configuration options are shown below.
@@ -1118,7 +1136,7 @@
         </para>
     </section>
 
-    <section id='sec:incremental_compile'>
+    <section id="sec:incremental_compile">
         <title>Incremental Java compilation</title>
         <para>Starting with Gradle 2.1, it is possible to compile Java incrementally. This feature is still incubating.
             See the <apilink class="org.gradle.api.tasks.compile.JavaCompile"/> task for information on how to enable it.</para>
@@ -1144,7 +1162,7 @@
         </para>
     </section>
 
-    <section id='sec:java_test'>
+    <section id="sec:java_test">
         <title>Test</title>
         <para>The <literal>test</literal> task is an instance of <apilink class="org.gradle.api.tasks.testing.Test"/>.
             It automatically detects and executes all unit tests in the <literal>test</literal> source set.
@@ -1152,7 +1170,7 @@
             Have a look at <apilink class="org.gradle.api.tasks.testing.Test"/> for the complete API.
         </para>
 
-        <section>
+        <section id="sec:test_execution">
             <title>Test execution</title>
             <para>Tests are executed in a separate JVM, isolated from the main build process. The <apilink class="org.gradle.api.tasks.testing.Test"/> task's
                 API allows you some control over how this happens.
@@ -1187,7 +1205,7 @@
             </para>
         </section>
 
-        <section>
+        <section id="sec:debugging">
             <title>Debugging</title>
             <para>
                 The test task provides a <apilink class="org.gradle.api.tasks.testing.Test" method="getDebug()" /> property that can be set to launch to make the JVM wait for a
@@ -1211,7 +1229,7 @@
                 <itemizedlist>
                     <listitem>Filtering at the level of specific test methods; executing a single test method</listitem>
                     <listitem>Filtering based on custom annotations (future)</listitem>
-                    <listitem>Filtering based on test hierarchy; executing all tests that extend ceratain base class (future)</listitem>
+                    <listitem>Filtering based on test hierarchy; executing all tests that extend a certain base class (future)</listitem>
                     <listitem>Filtering based on some custom runtime rule, e.g. particular value of a system property or some static state (future)</listitem>
                 </itemizedlist>
             </para>
@@ -1225,6 +1243,8 @@
                     <listitem>Command line option “--tests” is provided to conveniently set the test filter.
                         Especially useful for the classic 'single test method execution' use case.
                         When the command line option is used, the inclusion filters declared in the build script are ignored.
+                        It is possible to supply multiple “--tests” options and tests matching any of those patterns will be
+                        included.
                     </listitem>
                     <listitem>Gradle tries to filter the tests given the limitations of the test framework API.
                         Some advanced, synthetic tests may not be fully compatible with filtering.
@@ -1286,7 +1306,7 @@
                 </itemizedlist>
             </para>
         </section>
-        <section>
+        <section id="sec:single_test_execution_via_system_properties">
             <title>Single test execution via System Properties</title>
             <note>This mechanism has been superseded by 'Test Filtering', described above.</note>
             <para>Setting a system property of <replaceable>taskName.single</replaceable> = <replaceable>testNamePattern</replaceable>
@@ -1319,7 +1339,7 @@
             </para>
         </section>
 
-        <section>
+        <section id="sec:test_detection">
             <title>Test detection</title>
             <para>The <literal>Test</literal> task detects which classes are test classes by inspecting the compiled test classes.
                 By default it scans all <filename>.class</filename> files. You can set custom includes / excludes, only those
@@ -1450,7 +1470,7 @@
             </section>
         </section>
 
-        <section>
+        <section id="sec:convention_values">
             <title>Convention values</title>
             <table>
                 <title>Java plugin - test properties</title>
@@ -1481,17 +1501,12 @@
                     <td><classname>File</classname></td>
                     <td><literal>testReportDir</literal></td>
                 </tr>
-                <tr>
-                    <td><literal>testSrcDirs</literal></td>
-                    <td><classname>List&lt;File></classname></td>
-                    <td><literal>sourceSets.test.java.srcDirs</literal></td>
-                </tr>
             </table>
         </section>
 
     </section>
 
-    <section>
+    <section id="sec:jar">
         <title>Jar</title>
         <para>The <literal>jar</literal> task creates a JAR file containing the class files and resources of the
             project. The JAR file is declared as an artifact in the <literal>archives</literal> dependency
@@ -1500,7 +1515,7 @@
             more about how to work with archives in <xref linkend="sec:archives"/> and artifact configurations in
             <xref linkend="artifact_management"/>.
         </para>
-        <section id='sub:manifest'>
+        <section id="sub:manifest">
             <title>Manifest</title>
             <para>Each jar or war object has a <literal>manifest</literal>
                 property with a separate instance of <apilink class="org.gradle.api.java.archives.Manifest"/>.
@@ -1537,9 +1552,38 @@
         </section>
     </section>
 
-    <section id='sec:upload'>
+    <section id="sec:upload">
         <title>Uploading</title>
         <para>How to upload your archives is described in <xref linkend="artifact_management"/>.
+        </para>
+    </section>
+
+    <section id='sec:java_cross_compilation'>
+        <title>Compiling and testing for Java 6</title>
+        <para>Gradle can only run on Java version 7 or higher. Gradle 3.x still
+            supports compiling, testing, generating Javadoc and executing applications for Java 6.
+            Java 5 is not supported.
+        </para>
+        <para>To use Java 6 the following tasks need to be configured:
+            <itemizedlist>
+                <listitem><literal>JavaCompile</literal> task to fork and use the correct <literal>javac</literal> executable</listitem>
+                <listitem><literal>Javadoc</literal> task to use the correct <literal>javadoc</literal> executable</listitem>
+                <listitem><literal>Test</literal> and the <literal>JavaExec</literal> task to use the correct <literal>java</literal> executable.</listitem>
+            </itemizedlist>
+            The following sample shows how the <literal>build.gradle</literal> needs to be adjusted. In order to be able to make the build machine-independent,
+            the location of the Java 6 home should be configured in <literal>GRADLE_USER_HOME/gradle.properties</literal>
+            <footnote>
+                <para>
+                    For more details on <literal>gradle.properties</literal> see <xref linkend="sec:gradle_configuration_properties"/>
+                </para>
+            </footnote>
+            in the users home directory
+            on each developer machine, as shown in
+            the example.
+            <sample id="javaCrossCompilation" dir="java/crossCompilation" title="Configure Java 6 build">
+                <sourcefile file="gradle.properties" />
+                <sourcefile file="build.gradle" snippet="java-cross-compilation" />
+            </sample>
         </para>
     </section>
 

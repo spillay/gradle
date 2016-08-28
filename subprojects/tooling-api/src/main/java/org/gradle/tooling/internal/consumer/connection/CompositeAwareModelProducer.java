@@ -17,10 +17,13 @@
 package org.gradle.tooling.internal.consumer.connection;
 
 import org.gradle.api.Transformer;
-import org.gradle.tooling.composite.ModelResult;
-import org.gradle.tooling.composite.ProjectIdentity;
-import org.gradle.tooling.internal.composite.DefaultModelResult;
+import org.gradle.tooling.GradleConnectionException;
+import org.gradle.tooling.connection.ModelResult;
 import org.gradle.tooling.internal.adapter.ProtocolToModelAdapter;
+import org.gradle.tooling.internal.connection.DefaultFailedModelResult;
+import org.gradle.tooling.internal.connection.DefaultModelResult;
+import org.gradle.tooling.internal.connection.DefaultProjectIdentifier;
+import org.gradle.tooling.internal.consumer.ExceptionTransformer;
 import org.gradle.tooling.internal.consumer.parameters.BuildCancellationTokenAdapter;
 import org.gradle.tooling.internal.consumer.parameters.ConsumerOperationParameters;
 import org.gradle.tooling.internal.consumer.versioning.ModelMapping;
@@ -29,32 +32,55 @@ import org.gradle.tooling.internal.protocol.BuildResult;
 import org.gradle.tooling.internal.protocol.InternalCompositeAwareConnection;
 import org.gradle.tooling.internal.protocol.InternalUnsupportedModelException;
 import org.gradle.tooling.internal.protocol.ModelIdentifier;
+import org.gradle.tooling.model.ProjectIdentifier;
 import org.gradle.tooling.model.internal.Exceptions;
 
-import java.util.HashMap;
+import java.io.File;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 
-public class CompositeAwareModelProducer extends CancellableModelBuilderBackedModelProducer implements MultiModelProducer {
+public class CompositeAwareModelProducer extends HasCompatibilityMapping implements MultiModelProducer {
+    private final ModelProducer delegate;
+    private final ProtocolToModelAdapter adapter;
+    private final VersionDetails versionDetails;
+    private final ModelMapping modelMapping;
     private final InternalCompositeAwareConnection connection;
+    private final Transformer<RuntimeException, RuntimeException> exceptionTransformer;
 
-    public CompositeAwareModelProducer(ProtocolToModelAdapter adapter, VersionDetails versionDetails, ModelMapping modelMapping, InternalCompositeAwareConnection connection, Transformer<RuntimeException, RuntimeException> exceptionTransformer) {
-        super(adapter, versionDetails, modelMapping, connection, exceptionTransformer);
+    public CompositeAwareModelProducer(ModelProducer delegate, ProtocolToModelAdapter adapter, VersionDetails versionDetails, ModelMapping modelMapping, InternalCompositeAwareConnection connection, Transformer<RuntimeException, RuntimeException> exceptionTransformer) {
+        super(versionDetails);
+        this.delegate = delegate;
+        this.adapter = adapter;
+        this.versionDetails = versionDetails;
+        this.modelMapping = modelMapping;
         this.connection = connection;
+        this.exceptionTransformer = exceptionTransformer;
     }
 
     @Override
-    public <T> Iterable<ModelResult<T>> produceModels(Class<T> elementType, ConsumerOperationParameters operationParameters) {
+    public <T> T produceModel(Class<T> type, ConsumerOperationParameters operationParameters) {
+        return delegate.produceModel(type, operationParameters);
+    }
+
+    @Override
+    public <T> Iterable<ModelResult<T>> produceModels(final Class<T> elementType, ConsumerOperationParameters operationParameters) {
         BuildResult<?> result = buildModels(elementType, operationParameters);
-        if (result.getModel() instanceof Map) {
+        ExceptionTransformer exceptionTransformer = new CompositeExceptionTransformer(elementType);
+
+        if (result.getModel() instanceof List) {
             final List<ModelResult<T>> models = new LinkedList<ModelResult<T>>();
-            Map<Object, Object> targetMap = new HashMap<Object, Object>();
-            adapter.convertMap(targetMap, ProjectIdentity.class, elementType, Map.class.cast(result.getModel()), getCompatibilityMapperAction());
-            for (Map.Entry<Object, Object> e : targetMap.entrySet()) {
-                ProjectIdentity projectIdentity = (ProjectIdentity)e.getKey();
-                T model = (T)e.getValue();
-                models.add(new DefaultModelResult<T>(model, projectIdentity));
+            List resultMap = (List) result.getModel();
+            for (Object modelValueTriple : resultMap) {
+                Object[] t = (Object[]) modelValueTriple;
+                ProjectIdentifier projectIdentifier = new DefaultProjectIdentifier((File) t[0], (String) t[1]);
+                Object modelValue = t[2];
+                if (modelValue instanceof Throwable) {
+                    GradleConnectionException failure = exceptionTransformer.transform((Throwable) modelValue);
+                    models.add(new DefaultFailedModelResult<T>(projectIdentifier, failure));
+                } else {
+                    T modelResult = applyCompatibilityMapping(adapter.builder(elementType), projectIdentifier).build(modelValue);
+                    models.add(new DefaultModelResult<T>(modelResult));
+                }
             }
             return models;
         }
@@ -76,6 +102,32 @@ public class CompositeAwareModelProducer extends CancellableModelBuilderBackedMo
             throw exceptionTransformer.transform(e);
         }
         return result;
+    }
+
+    private static class CompositeExceptionTransformer extends ExceptionTransformer {
+        private final Class<?> modelType;
+
+        public CompositeExceptionTransformer(Class<?> modelType) {
+            super(createConnectionTransformer(modelType));
+            this.modelType = modelType;
+        }
+
+        @Override
+        public GradleConnectionException transform(Throwable failure) {
+            if (failure instanceof InternalUnsupportedModelException) {
+                return Exceptions.unknownModel(modelType, (InternalUnsupportedModelException) failure);
+            }
+            return super.transform(failure);
+        }
+
+        private static Transformer<String, Throwable> createConnectionTransformer(final Class<?> type) {
+            return new Transformer<String, Throwable>() {
+                @Override
+                public String transform(Throwable throwable) {
+                    return String.format("Could not fetch models of type '%s' using Gradle daemon composite connection.", type.getSimpleName());
+                }
+            };
+        }
     }
 
 }

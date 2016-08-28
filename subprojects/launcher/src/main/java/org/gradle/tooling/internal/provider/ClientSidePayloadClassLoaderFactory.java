@@ -17,10 +17,16 @@
 package org.gradle.tooling.internal.provider;
 
 import org.gradle.internal.classloader.ClassLoaderSpec;
-import org.gradle.internal.classloader.MutableURLClassLoader;
 import org.gradle.internal.classloader.TransformingClassLoader;
+import org.gradle.internal.classloader.VisitableURLClassLoader;
 import org.gradle.tooling.provider.model.internal.LegacyConsumerInterface;
-import org.objectweb.asm.*;
+import org.gradle.util.internal.Java9ClassReader;
+import org.objectweb.asm.AnnotationVisitor;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 
 import java.net.URL;
 import java.util.Arrays;
@@ -36,8 +42,8 @@ public class ClientSidePayloadClassLoaderFactory implements PayloadClassLoaderFa
     }
 
     public ClassLoader getClassLoaderFor(ClassLoaderSpec spec, List<? extends ClassLoader> parents) {
-        if (spec instanceof MutableURLClassLoader.Spec) {
-            MutableURLClassLoader.Spec clSpec = (MutableURLClassLoader.Spec) spec;
+        if (spec instanceof VisitableURLClassLoader.Spec) {
+            VisitableURLClassLoader.Spec clSpec = (VisitableURLClassLoader.Spec) spec;
             if (parents.size() != 1) {
                 throw new IllegalStateException("Expected exactly one parent ClassLoader");
             }
@@ -52,9 +58,9 @@ public class ClientSidePayloadClassLoaderFactory implements PayloadClassLoaderFa
         }
 
         @Override
-        protected byte[] transform(byte[] bytes) {
+        protected byte[] transform(String className, byte[] bytes) {
             // First scan for annotation, and short circuit transformation if not present
-            ClassReader classReader = new ClassReader(bytes);
+            ClassReader classReader = new Java9ClassReader(bytes);
 
             AnnotationDetector detector = new AnnotationDetector();
             classReader.accept(detector, ClassReader.SKIP_DEBUG | ClassReader.SKIP_CODE);

@@ -16,11 +16,8 @@
 
 package org.gradle.tooling.internal.provider
 
-import org.gradle.internal.Factory
-import org.gradle.cache.CacheBuilder
-import org.gradle.cache.CacheRepository
-import org.gradle.cache.PersistentCache
-import org.gradle.internal.classloader.MutableURLClassLoader
+import org.gradle.internal.classpath.CachedClasspathTransformer
+import org.gradle.internal.classloader.VisitableURLClassLoader
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.junit.Rule
 import spock.lang.Specification
@@ -29,29 +26,22 @@ class DaemonSidePayloadClassLoaderFactoryTest extends Specification {
     @Rule
     TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider()
     def factory = Mock(PayloadClassLoaderFactory)
-    def jarCache = Mock(JarCache)
-    def cache = Stub(PersistentCache)
-    def cacheBuilder = Stub(CacheBuilder) {
-        open() >> cache
-        withDisplayName(_) >> { cacheBuilder }
-        withCrossVersionCache() >> { cacheBuilder }
-        withLockOptions(_) >> { cacheBuilder }
-    }
-    def cacheRepository = Stub(CacheRepository) {
-        cache(_) >> cacheBuilder
-    }
+    def classpathTransformer = Mock(CachedClasspathTransformer)
 
-    def registry = new DaemonSidePayloadClassLoaderFactory(factory, jarCache, cacheRepository)
+    def registry = new DaemonSidePayloadClassLoaderFactory(factory, classpathTransformer)
 
     def "creates ClassLoader for classpath"() {
         def url1 = new URL("http://localhost/file1.jar")
         def url2 = new URL("http://localhost/file2.jar")
 
+        given:
+        classpathTransformer.transform(_) >> [ url1, url2 ]
+
         when:
-        def cl = registry.getClassLoaderFor(new MutableURLClassLoader.Spec([url1, url2]), [null])
+        def cl = registry.getClassLoaderFor(new VisitableURLClassLoader.Spec([url1, url2]), [null])
 
         then:
-        cl instanceof MutableURLClassLoader
+        cl instanceof VisitableURLClassLoader
         cl.URLs == [url1, url2] as URL[]
     }
 
@@ -63,14 +53,13 @@ class DaemonSidePayloadClassLoaderFactoryTest extends Specification {
         def url2 = tmpDir.createDir("classes-dir").toURI().toURL()
 
         given:
-        cache.useCache(_, _) >> { String display, Factory f -> f.create() }
-        jarCache.getCachedJar(jarFile, _) >> cachedJar
+        classpathTransformer.transform(_) >> [ cached, url2 ]
 
         when:
-        def cl = registry.getClassLoaderFor(new MutableURLClassLoader.Spec([url1, url2]), [null])
+        def cl = registry.getClassLoaderFor(new VisitableURLClassLoader.Spec([url1, url2]), [null])
 
         then:
-        cl instanceof MutableURLClassLoader
+        cl instanceof VisitableURLClassLoader
         cl.URLs == [cached, url2] as URL[]
     }
 }

@@ -16,11 +16,18 @@
 <chapter id="jetty_plugin">
     <title>The Jetty Plugin</title>
 
+    <note>
+        <para>
+            This plugin is deprecated and will be removed in Gradle 4.0.
+            Consider using the more feature-rich <ulink url="https://github.com/akhikhl/gretty">Gretty plugin</ulink> instead.
+        </para>
+    </note>
+
     <para>The Jetty plugin extends the War plugin to add tasks which allow you to deploy your web application to a
         Jetty web container embedded in the build.
     </para>
 
-    <section>
+    <section id="sec:jetty_usage">
         <title>Usage</title>
         <para>To use the Jetty plugin, include the following in your build script:</para>
         <sample id="useJettyPlugin" dir="webApplication/quickstart" title="Using the Jetty plugin">
@@ -28,7 +35,7 @@
         </sample>
     </section>
 
-    <section>
+    <section id="sec:jetty_tasks">
         <title>Tasks</title>
         <para>The Jetty plugin defines the following tasks:</para>
         <table>
@@ -78,17 +85,17 @@
         </figure>
     </section>
 
-    <section>
+    <section id="sec:jetty_project_layout">
         <title>Project layout</title>
         <para>The Jetty plugin uses the same layout as the War plugin.</para>
     </section>
 
-    <section>
+    <section id="sec:jetty_dependency_management">
         <title>Dependency management</title>
         <para>The Jetty plugin does not define any dependency configurations.</para>
     </section>
 
-    <section>
+    <section id="sec:jetty_convention_properties">
         <title>Convention properties</title>
         <para>The Jetty plugin defines the following convention properties:</para>
         <table>

@@ -16,13 +16,19 @@
 
 package org.gradle.util;
 
+import com.google.common.base.Charsets;
 import org.apache.commons.lang.StringUtils;
 import org.gradle.api.UncheckedIOException;
+import org.gradle.internal.UncheckedException;
+import org.gradle.internal.io.LineBufferingOutputStream;
+import org.gradle.internal.io.SkipFirstTextStream;
+import org.gradle.internal.io.WriterTextStream;
 
 import java.io.*;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.*;
+import java.util.concurrent.Callable;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -73,8 +79,8 @@ public class GUtil {
     }
 
     /**
-     * Flattens input collections (including arrays *but* not maps).
-     * If input is not a collection wraps it in a collection and returns it.
+     * Flattens input collections (including arrays *but* not maps). If input is not a collection wraps it in a collection and returns it.
+     *
      * @param input any object
      * @return collection of flattened input or single input wrapped in a collection.
      */
@@ -218,6 +224,30 @@ public class GUtil {
         }
     }
 
+    public static void saveProperties(Properties properties, OutputStream outputStream) {
+        try {
+            try {
+                properties.store(outputStream, null);
+            } finally {
+                outputStream.close();
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    public static void savePropertiesNoDateComment(Properties properties, OutputStream outputStream) {
+        saveProperties(properties,
+            new LineBufferingOutputStream(
+                new SkipFirstTextStream(
+                    new WriterTextStream(
+                        new OutputStreamWriter(outputStream, Charsets.ISO_8859_1)
+                    )
+                )
+            )
+        );
+    }
+
     public static Map map(Object... objects) {
         Map map = new HashMap();
         assert objects.length % 2 == 0;
@@ -357,5 +387,20 @@ public class GUtil {
                 return comparator.compare(o1, o2);
             }
         };
+    }
+
+    /**
+     * Calls the given callable converting any thrown exception to an unchecked exception via {@link UncheckedException#throwAsUncheckedException(Throwable)}
+     *
+     * @param callable The callable to call
+     * @param <T> Callable's return type
+     * @return The value returned by {@link Callable#call()}
+     */
+    public static <T> T uncheckedCall(Callable<T> callable) {
+        try {
+            return callable.call();
+        } catch (Exception e) {
+            throw UncheckedException.throwAsUncheckedException(e);
+        }
     }
 }

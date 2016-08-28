@@ -19,15 +19,13 @@ package org.gradle.integtests.tooling.r18
 import org.gradle.integtests.tooling.fixture.TargetGradleVersion
 import org.gradle.integtests.tooling.fixture.ToolingApiSpecification
 import org.gradle.integtests.tooling.fixture.ToolingApiVersion
-import org.gradle.test.fixtures.file.LeaksFileHandles
 import org.gradle.tooling.BuildActionFailureException
 import org.gradle.tooling.BuildException
 import org.gradle.tooling.UnsupportedVersionException
+import org.gradle.tooling.model.build.BuildEnvironment
 import org.gradle.tooling.model.idea.IdeaProject
 
-@ToolingApiVersion('>=1.8')
 @TargetGradleVersion('>=1.8')
-@LeaksFileHandles
 class BuildActionCrossVersionSpec extends ToolingApiSpecification {
     def "client receives the result of running a build action"() {
         given:
@@ -128,7 +126,7 @@ class BuildActionCrossVersionSpec extends ToolingApiSpecification {
     }
 
     @ToolingApiVersion('current')
-    @TargetGradleVersion('>=1.0-milestone-8 <1.8')
+    @TargetGradleVersion('>=1.2 <1.8')
     def "gives reasonable error message when target Gradle version does not support build actions"() {
         when:
         withConnection { it.action(new FetchCustomModel()).run() }
@@ -136,5 +134,19 @@ class BuildActionCrossVersionSpec extends ToolingApiSpecification {
         then:
         UnsupportedVersionException e = thrown()
         e.message == "The version of Gradle you are using (${targetDist.version.version}) does not support the BuildActionExecuter API. Support for this is available in Gradle 1.8 and all later versions."
+    }
+
+    @TargetGradleVersion('>=2.13')
+    def "can use build action to retrieve BuildEnvironment model"() {
+        given:
+        file("settings.gradle") << 'rootProject.name="hello-world"'
+
+        when:
+        BuildEnvironment buildEnvironment = withConnection { it.action(new FetchBuildEnvironment()).run() }
+
+        then:
+        buildEnvironment.gradle.gradleVersion == targetDist.getVersion().version
+        buildEnvironment.java.javaHome
+        !buildEnvironment.java.jvmArguments.empty
     }
 }

@@ -17,9 +17,7 @@ package org.gradle.integtests
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.executer.ArtifactBuilder
-import org.gradle.test.fixtures.file.LeaksFileHandles
 
-@LeaksFileHandles
 public class CustomPluginIntegrationTest extends AbstractIntegrationSpec {
     public void "can reference plugin in buildSrc by id"() {
         given:
@@ -91,11 +89,17 @@ import org.gradle.api.*
 public class CustomPlugin implements Plugin<Project> {
     public void apply(Project p) {
         Project.class.classLoader.loadClass('${implClassName}')
+        def cl
         try {
-            getClass().classLoader.loadClass('${implClassName}')
+            cl = getClass().classLoader
+            cl.loadClass('${implClassName}')
             assert false: 'should fail'
         } catch (ClassNotFoundException e) {
             // expected
+        } finally {
+            if (cl instanceof URLClassLoader) {
+                cl.close()
+            }
         }
         assert Thread.currentThread().contextClassLoader == getClass().classLoader
         p.task('test')

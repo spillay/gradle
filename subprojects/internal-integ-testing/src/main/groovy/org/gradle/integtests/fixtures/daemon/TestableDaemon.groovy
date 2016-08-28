@@ -18,6 +18,8 @@ package org.gradle.integtests.fixtures.daemon
 
 import org.gradle.launcher.daemon.registry.DaemonRegistry
 
+import static org.gradle.launcher.daemon.server.api.DaemonStateControl.*
+
 class TestableDaemon extends AbstractDaemonFixture {
     private final DaemonLogFileStateProbe logFileProbe
     private final DaemonRegistryStateProbe registryProbe
@@ -48,6 +50,16 @@ Current registry state is ${lastRegistryState} and current log state is ${lastLo
     protected void assertHasState(State state) {
         assert logFileProbe.currentState == state
         assert registryProbe.currentState == state
+    }
+
+    @Override
+    void assertRegistryNotWorldReadable() {
+        registryProbe.assertRegistryNotWorldReadable()
+    }
+
+    @Override
+    void changeTokenVisibleToClient() {
+        registryProbe.resetToken()
     }
 
     String getLog() {

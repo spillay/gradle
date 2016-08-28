@@ -103,13 +103,13 @@ class JULRedirectorTest extends Specification {
         redirector.stop()
 
         then:
-        3 * stdErrListener.onOutput('SEVERE: Test' + EOL)
-        3 * stdErrListener.onOutput('WARNING: Test' + EOL)
-        3 * stdErrListener.onOutput('INFO: Test' + EOL)
-        0 * stdErrListener.onOutput('CONFIG: Test' + EOL)
-        0 * stdErrListener.onOutput('FINE: Test' + EOL)
-        0 * stdErrListener.onOutput('FINER: Test' + EOL)
-        0 * stdErrListener.onOutput('FINEST: Test' + EOL)
+        3 * stdErrListener.onOutput("${Level.SEVERE.getLocalizedName()}: Test$EOL")
+        3 * stdErrListener.onOutput("${Level.WARNING.getLocalizedName()}: Test$EOL")
+        3 * stdErrListener.onOutput("${Level.INFO.getLocalizedName()}: Test$EOL")
+        0 * stdErrListener.onOutput("${Level.CONFIG.getLocalizedName()}: Test$EOL")
+        0 * stdErrListener.onOutput("${Level.FINE.getLocalizedName()}: Test$EOL")
+        0 * stdErrListener.onOutput("${Level.FINER.getLocalizedName()}: Test$EOL")
+        0 * stdErrListener.onOutput("${Level.FINEST.getLocalizedName()}: Test$EOL")
 
         System.out == outputs.stdOutPrintStream
         System.err == outputs.stdErrPrintStream
@@ -139,6 +139,35 @@ class JULRedirectorTest extends Specification {
         2 * stdErrListener.onOutput('[FINER] Test' + EOL)
         1 * stdErrListener.onOutput('[FINEST] Test' + EOL)
         0 * _
+
+        System.out == outputs.stdOutPrintStream
+        System.err == outputs.stdErrPrintStream
+    }
+
+    def "start and stop output with default logging readLoggingConfigFile is not true."() {
+        System.setProperty("java.util.logging.config.class", JULCustomInit.class.name)
+        System.setProperty(JULRedirector.READ_LOGGING_CONFIG_FILE_PROPERTY, "false")
+
+        when:
+        redirector.redirectStandardOutputTo(stdOutListener)
+        redirector.redirectStandardErrorTo(stdErrListener)
+
+        redirector.start()
+        [Level.SEVERE, Level.WARNING, Level.INFO, Level.CONFIG, Level.FINE, Level.FINER, Level.FINEST].each {
+            logger1.log(it, "Test");
+            logger2.log(it, "Test");
+            logger3.log(it, "Test");
+        }
+        redirector.stop()
+
+        then:
+        3 * stdErrListener.onOutput("${Level.SEVERE.getLocalizedName()}: Test$EOL")
+        3 * stdErrListener.onOutput("${Level.WARNING.getLocalizedName()}: Test$EOL")
+        3 * stdErrListener.onOutput("${Level.INFO.getLocalizedName()}: Test$EOL")
+        0 * stdErrListener.onOutput("${Level.CONFIG.getLocalizedName()}: Test$EOL")
+        0 * stdErrListener.onOutput("${Level.FINE.getLocalizedName()}: Test$EOL")
+        0 * stdErrListener.onOutput("${Level.FINER.getLocalizedName()}: Test$EOL")
+        0 * stdErrListener.onOutput("${Level.FINEST.getLocalizedName()}: Test$EOL")
 
         System.out == outputs.stdOutPrintStream
         System.err == outputs.stdErrPrintStream

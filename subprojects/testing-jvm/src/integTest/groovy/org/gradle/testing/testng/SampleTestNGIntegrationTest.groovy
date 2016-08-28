@@ -15,7 +15,11 @@
  */
 package org.gradle.testing.testng
 
-import org.gradle.integtests.fixtures.*
+import org.gradle.integtests.fixtures.AbstractIntegrationTest
+import org.gradle.integtests.fixtures.DefaultTestExecutionResult
+import org.gradle.integtests.fixtures.Sample
+import org.gradle.integtests.fixtures.TestNGExecutionResult
+import org.gradle.integtests.fixtures.UsesSample
 import org.junit.Rule
 import org.junit.Test
 
@@ -33,17 +37,8 @@ public class SampleTestNGIntegrationTest extends AbstractIntegrationTest {
         result.testClass('org.gradle.testng.UserImplTest').assertTestPassed('testOkFirstName')
     }
 
-    @Test @UsesSample('testing/testng/java-jdk14-passing')
-    public void javaJdk14Passing() {
-        executer.inDirectory(sample.dir).withTasks('clean', 'test').run()
-
-        def result = new DefaultTestExecutionResult(sample.dir)
-        result.assertTestClassesExecuted('org.gradle.OkTest')
-        result.testClass('org.gradle.OkTest').assertTestPassed('passingTest')
-    }
-    
-    @Test @UsesSample('testing/testng/java-jdk15-passing')
-    public void javaJdk15Passing() {
+    @Test @UsesSample('testing/testng/java-passing')
+    public void javaPassing() {
         executer.inDirectory(sample.dir).withTasks('clean', 'test').run()
 
         def result = new TestNGExecutionResult(sample.dir)

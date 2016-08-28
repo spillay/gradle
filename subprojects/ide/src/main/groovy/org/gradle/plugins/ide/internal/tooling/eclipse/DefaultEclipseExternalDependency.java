@@ -22,40 +22,47 @@ import org.gradle.tooling.model.GradleModuleVersion;
 
 import java.io.File;
 import java.io.Serializable;
+import java.util.List;
 
-public class DefaultEclipseExternalDependency implements ExternalDependencyVersion1, Serializable {
+public class DefaultEclipseExternalDependency extends DefaultEclipseDependency implements ExternalDependencyVersion1,
+    Serializable {
     private final File file;
     private final File javadoc;
     private final File source;
 
-    private final boolean exported;
+    private final ModuleVersionIdentifier identifier;
     private final GradleModuleVersion moduleVersion;
 
-    public DefaultEclipseExternalDependency(File file, File javadoc, File source, ModuleVersionIdentifier identifier, boolean exported) {
+    public DefaultEclipseExternalDependency(File file, File javadoc, File source, ModuleVersionIdentifier identifier, boolean exported, List<DefaultClasspathAttribute> attributes, List<DefaultAccessRule> accessRules) {
+        super(exported, attributes, accessRules);
         this.file = file;
         this.javadoc = javadoc;
         this.source = source;
-        this.exported = exported;
-        moduleVersion = (identifier == null)? null : new DefaultGradleModuleVersion(identifier);
+        this.identifier = identifier;
+        this.moduleVersion = (identifier == null)? null : new DefaultGradleModuleVersion(identifier);
     }
 
+    @Override
     public File getFile() {
         return file;
     }
 
+    @Override
     public File getJavadoc() {
         return javadoc;
     }
 
+    @Override
     public File getSource() {
         return source;
+    }
+
+    public ModuleVersionIdentifier getModuleVersionIdentifier() {
+        return identifier;
     }
 
     public GradleModuleVersion getGradleModuleVersion() {
         return moduleVersion;
     }
 
-    public boolean isExported() {
-        return exported;
-    }
 }

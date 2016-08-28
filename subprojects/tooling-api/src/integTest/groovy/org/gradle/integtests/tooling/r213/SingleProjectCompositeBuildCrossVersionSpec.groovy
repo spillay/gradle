@@ -15,30 +15,16 @@
  */
 
 package org.gradle.integtests.tooling.r213
-
 import org.gradle.integtests.tooling.fixture.CompositeToolingApiSpecification
-import org.gradle.tooling.BuildException
+import org.gradle.tooling.GradleConnectionException
 import org.gradle.tooling.model.eclipse.EclipseProject
-
 /**
  * Builds a composite with a single project.
  */
 class SingleProjectCompositeBuildCrossVersionSpec extends CompositeToolingApiSpecification {
     def "can create composite of a single multi-project build"() {
         given:
-        def singleBuild = populate("single-build") {
-            buildFile << """
-                allprojects {
-                    apply plugin: 'java'
-                    group = 'group'
-                    version = '1.0'
-                }
-"""
-            settingsFile << """
-                rootProject.name = '${rootProjectName}'
-                include 'a', 'b', 'c'
-"""
-        }
+        def singleBuild = multiProjectBuild("single-build", ['a', 'b', 'c'])
         when:
         def models = withCompositeConnection(singleBuild) { connection ->
             unwrap(connection.getModels(EclipseProject))
@@ -51,16 +37,7 @@ class SingleProjectCompositeBuildCrossVersionSpec extends CompositeToolingApiSpe
 
     def "can create composite of a single single-project build"() {
         given:
-        def singleBuild = populate("single-build") {
-            buildFile << """
-                apply plugin: 'java'
-                group = 'group'
-                version = '1.0'
-"""
-            settingsFile << """
-                rootProject.name = '${rootProjectName}'
-"""
-        }
+        def singleBuild = singleProjectBuild("single-build")
         when:
         def models = withCompositeConnection(singleBuild) { connection ->
             unwrap(connection.getModels(EclipseProject))
@@ -71,20 +48,34 @@ class SingleProjectCompositeBuildCrossVersionSpec extends CompositeToolingApiSpe
         containsProjects(models, [':'])
     }
 
-    def "sees changes to composite build when projects are added"() {
+    def "participant is always treated as root of a build"() {
         given:
-        def singleBuild = populate("single-build") {
+        def badParentDir = multiProjectBuild("bad-parent", ['a', 'b', 'c']) {
             buildFile << """
                 allprojects {
-                    apply plugin: 'java'
-                    group = 'group'
-                    version = '1.0'
+                    throw new RuntimeException("Badly configured project")
                 }
 """
-            settingsFile << """
-                rootProject.name = '${rootProjectName}'
-"""
         }
+        def goodChildProject = badParentDir.file("c").createDir()
+        goodChildProject.file("build.gradle") <<"""
+            apply plugin: 'java'
+"""
+        when:
+        def models = withCompositeConnection(goodChildProject) { connection ->
+            unwrap(connection.getModels(EclipseProject))
+        }
+        then:
+        models.size() == 1
+        EclipseProject project = models.get(0)
+        project.gradleProject.parent == null
+        project.gradleProject.path == ':'
+        project.projectDirectory == goodChildProject
+    }
+
+    def "sees changes to composite build when projects are added"() {
+        given:
+        def singleBuild = singleProjectBuild("single-build")
         def composite = createComposite(singleBuild)
 
         when:
@@ -97,11 +88,9 @@ class SingleProjectCompositeBuildCrossVersionSpec extends CompositeToolingApiSpe
 
         when:
         // make project a multi-project build
-        populate("single-build") {
-            settingsFile << """
+        singleBuild.settingsFile << """
                 include 'a'
 """
-        }
         and:
         def secondRetrieval = unwrap(composite.getModels(EclipseProject))
 
@@ -112,9 +101,7 @@ class SingleProjectCompositeBuildCrossVersionSpec extends CompositeToolingApiSpe
 
         when:
         // adding more projects to multi-project build
-        populate("single-build") {
-            settingsFile << "include 'b', 'c'"
-        }
+        singleBuild.settingsFile << "include 'b', 'c'"
         and:
         def thirdRetrieval = unwrap(composite.getModels(EclipseProject))
 
@@ -131,14 +118,10 @@ class SingleProjectCompositeBuildCrossVersionSpec extends CompositeToolingApiSpe
         def fourthRetrieval = unwrap(composite.getModels(EclipseProject))
 
         then:
-        def e = thrown(BuildException)
-        def causes = getCausalChain(e)
-        causes.any {
-            it.message.contains("Could not fetch models of type 'EclipseProject'")
-        }
-        causes.any {
-            it.message.contains("single-build' does not exist")
-        }
+        def e = thrown(GradleConnectionException)
+        assertFailure(e,
+            integratedComposite ? "Could not fetch models of type 'EclipseProject'" : "Could not fetch model of type 'EclipseProject'",
+            "single-build' does not exist")
 
         cleanup:
         composite?.close()

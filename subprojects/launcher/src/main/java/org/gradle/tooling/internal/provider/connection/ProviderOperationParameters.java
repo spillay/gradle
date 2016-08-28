@@ -165,17 +165,8 @@ public interface ProviderOperationParameters {
     List<File> getInjectedPluginClasspath(List<File> defaultClasspath);
 
     /**
-     * @since 2.13-rc-1
-     *
+     * @since 2.14-rc-1
      */
     @Nullable
     List<GradleParticipantBuild> getBuilds(List<GradleParticipantBuild> defaultBuilds);
-
-    /**
-     * @since 2.13-rc-1
-     *
-     */
-    Boolean isEmbeddedParticipants();
-
-    File getCompositeTargetBuildRootDir(File defaultRootDir);
 }

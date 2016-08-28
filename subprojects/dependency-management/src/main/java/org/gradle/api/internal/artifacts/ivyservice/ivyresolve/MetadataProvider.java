@@ -20,10 +20,9 @@ import org.gradle.api.Nullable;
 import org.gradle.api.artifacts.ComponentMetadata;
 import org.gradle.api.artifacts.ivy.IvyModuleDescriptor;
 import org.gradle.api.internal.artifacts.ivyservice.DefaultIvyModuleDescriptor;
-import org.gradle.api.internal.artifacts.repositories.resolver.ComponentMetadataDetailsAdapter;
-import org.gradle.internal.component.external.model.IvyModuleResolveMetaData;
-import org.gradle.internal.component.external.model.ModuleComponentResolveMetaData;
-import org.gradle.internal.component.external.model.MutableModuleComponentResolveMetaData;
+import org.gradle.api.internal.artifacts.repositories.resolver.ComponentMetadataAdapter;
+import org.gradle.internal.component.external.model.IvyModuleResolveMetadata;
+import org.gradle.internal.component.external.model.ModuleComponentResolveMetadata;
 import org.gradle.internal.resolve.result.BuildableModuleComponentMetaDataResolveResult;
 
 public class MetadataProvider {
@@ -40,14 +39,14 @@ public class MetadataProvider {
     }
 
     public ComponentMetadata getComponentMetadata() {
-        return new ComponentMetadataDetailsAdapter(getMetaData());
+        return new ComponentMetadataAdapter(getMetaData());
     }
 
     @Nullable
     public IvyModuleDescriptor getIvyModuleDescriptor() {
-        ModuleComponentResolveMetaData metaData = getMetaData();
-        if (metaData instanceof IvyModuleResolveMetaData) {
-            IvyModuleResolveMetaData ivyMetadata = (IvyModuleResolveMetaData) metaData;
+        ModuleComponentResolveMetadata metaData = getMetaData();
+        if (metaData instanceof IvyModuleResolveMetadata) {
+            IvyModuleResolveMetadata ivyMetadata = (IvyModuleResolveMetadata) metaData;
             return new DefaultIvyModuleDescriptor(ivyMetadata.getExtraInfo(), ivyMetadata.getBranch(), ivyMetadata.getStatus());
         }
         return null;
@@ -60,7 +59,7 @@ public class MetadataProvider {
         return cachedResult.getState() == BuildableModuleComponentMetaDataResolveResult.State.Resolved;
     }
 
-    public MutableModuleComponentResolveMetaData getMetaData() {
+    public ModuleComponentResolveMetadata getMetaData() {
         resolve();
         return cachedResult.getMetaData();
     }

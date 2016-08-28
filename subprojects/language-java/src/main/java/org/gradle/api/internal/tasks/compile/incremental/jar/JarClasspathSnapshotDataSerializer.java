@@ -16,23 +16,29 @@
 
 package org.gradle.api.internal.tasks.compile.incremental.jar;
 
-import org.gradle.internal.serialize.*;
+import com.google.common.hash.HashCode;
+import org.gradle.internal.serialize.Decoder;
+import org.gradle.internal.serialize.Encoder;
+import org.gradle.internal.serialize.HashCodeSerializer;
+import org.gradle.internal.serialize.MapSerializer;
+import org.gradle.internal.serialize.Serializer;
+import org.gradle.internal.serialize.SetSerializer;
 
 import java.io.File;
 import java.util.Map;
 import java.util.Set;
 
-import static org.gradle.internal.serialize.BaseSerializerFactory.*;
+import static org.gradle.internal.serialize.BaseSerializerFactory.FILE_SERIALIZER;
+import static org.gradle.internal.serialize.BaseSerializerFactory.STRING_SERIALIZER;
 
 public class JarClasspathSnapshotDataSerializer implements Serializer<JarClasspathSnapshotData> {
-
-    private final MapSerializer<File, byte[]> mapSerializer = new MapSerializer<File, byte[]>(FILE_SERIALIZER, BYTE_ARRAY_SERIALIZER);
+    private final MapSerializer<File, HashCode> mapSerializer = new MapSerializer<File, HashCode>(FILE_SERIALIZER, new HashCodeSerializer());
     private final SetSerializer<String> setSerializer = new SetSerializer<String>(STRING_SERIALIZER, false);
 
     @Override
     public JarClasspathSnapshotData read(Decoder decoder) throws Exception {
         Set<String> duplicates = setSerializer.read(decoder);
-        Map<File, byte[]> hashes = mapSerializer.read(decoder);
+        Map<File, HashCode> hashes = mapSerializer.read(decoder);
         return new JarClasspathSnapshotData(hashes, duplicates);
     }
 

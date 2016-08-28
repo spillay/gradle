@@ -20,9 +20,8 @@ import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.AvailableJavaHomes
 import org.gradle.integtests.fixtures.daemon.DaemonLogsAnalyzer
 import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
-import org.gradle.launcher.daemon.client.DefaultDaemonConnector
+import org.gradle.launcher.daemon.client.DaemonStartupMessage
 import org.gradle.launcher.daemon.client.SingleUseDaemonClient
-import org.gradle.util.GradleVersion
 import spock.lang.IgnoreIf
 
 import java.nio.charset.Charset
@@ -31,9 +30,6 @@ import java.nio.charset.Charset
 class SingleUseDaemonIntegrationTest extends AbstractIntegrationSpec {
 
     def setup() {
-        // Need forking executer
-        // '-ea' is always set on the forked process. So I've added it explicitly here.
-        executer.requireGradleHome().withEnvironmentVars(["JAVA_OPTS": "-ea"])
         executer.requireIsolatedDaemons()
     }
 
@@ -139,19 +135,6 @@ assert System.getProperty('some-prop') == 'some-value'
         wasNotForked()
     }
 
-    @IgnoreIf({ AvailableJavaHomes.java5 == null })
-    def "fails when using Java 5 as the target JVM"() {
-        def java5 = AvailableJavaHomes.java5
-
-        file('gradle.properties').writeProperties("org.gradle.java.home": java5.javaHome.absolutePath)
-
-        when:
-        fails()
-
-        then:
-        failure.assertHasDescription("Gradle ${GradleVersion.current().version} requires Java 6 or later to run. Your build is currently configured to use Java 5.")
-    }
-
     def "does not fork build when immutable system property is set on command line with same value as current JVM"() {
         def encoding = Charset.defaultCharset().name()
 
@@ -171,19 +154,6 @@ assert System.getProperty('some-prop') == 'some-value'
         wasNotForked()
     }
 
-    def "does not print suggestion to use the daemon for a single use daemon"() {
-        given:
-        requireJvmArg('-Xmx64m')
-
-        when:
-        succeeds()
-
-        then:
-        !output.contains(DaemonUsageSuggestionIntegrationTest.DAEMON_USAGE_SUGGESTION_MESSAGE)
-        wasForked()
-        daemons.daemon.stops()
-    }
-
     def "does not print daemon startup message for a single use daemon"() {
         given:
         requireJvmArg('-Xmx64m')
@@ -192,7 +162,7 @@ assert System.getProperty('some-prop') == 'some-value'
         succeeds()
 
         then:
-        !output.contains(DefaultDaemonConnector.STARTING_DAEMON_MESSAGE)
+        !output.contains(DaemonStartupMessage.STARTING_DAEMON_MESSAGE)
         wasForked()
         daemons.daemon.stops()
     }

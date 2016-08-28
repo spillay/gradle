@@ -22,6 +22,10 @@ package org.gradle.api.specs;
  * @param <T> The target type for this Spec
  */
 public class OrSpec<T> extends CompositeSpec<T> {
+    public OrSpec() {
+        super();
+    }
+
     public OrSpec(Spec<? super T>... specs) {
         super(specs);
     }
@@ -41,5 +45,10 @@ public class OrSpec<T> extends CompositeSpec<T> {
             }
         }
         return false;
+    }
+
+    @Override
+    public int hashCode() {
+        return 13 * super.hashCode();
     }
 }

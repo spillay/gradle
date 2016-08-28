@@ -17,10 +17,11 @@
 package org.gradle.api.plugins.jetty;
 
 import org.gradle.api.InvalidUserDataException;
+import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.internal.ConventionTask;
-import org.gradle.logging.ProgressLogger;
-import org.gradle.logging.ProgressLoggerFactory;
+import org.gradle.internal.logging.progress.ProgressLogger;
+import org.gradle.internal.logging.progress.ProgressLoggerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,9 +32,12 @@ import java.net.Socket;
 
 /**
  * Stops the embedded Jetty web container, if it is running.
+ *
+ * @deprecated The Jetty plugin has been deprecated
  */
+@Deprecated
 public class JettyStop extends ConventionTask {
-    private static Logger logger = LoggerFactory.getLogger(JettyStop.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(JettyStop.class);
 
     private Integer stopPort;
 
@@ -59,9 +63,9 @@ public class JettyStop extends ConventionTask {
             out.flush();
             s.close();
         } catch (ConnectException e) {
-            logger.info("Jetty not running!");
+            LOGGER.info("Jetty not running!");
         } catch (Exception e) {
-            logger.error("Exception during stopping", e);
+            LOGGER.error("Exception during stopping", e);
         } finally {
             progressLogger.completed();
         }
@@ -70,6 +74,7 @@ public class JettyStop extends ConventionTask {
     /**
      * Returns the TCP port to use to send stop command.
      */
+    @Internal
     public Integer getStopPort() {
         return stopPort;
     }
@@ -86,6 +91,7 @@ public class JettyStop extends ConventionTask {
      *
      * @see #setStopKey(String)
      */
+    @Internal
     public String getStopKey() {
         return stopKey;
     }

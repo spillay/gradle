@@ -35,8 +35,6 @@ import org.gradle.api.tasks.bundling.Jar;
 import org.gradle.api.tasks.javadoc.Javadoc;
 import org.gradle.api.tasks.testing.Test;
 
-import java.io.File;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.concurrent.Callable;
@@ -58,9 +56,11 @@ public class JavaPlugin implements Plugin<ProjectInternal> {
     public static final String COMPILE_CONFIGURATION_NAME = "compile";
     public static final String COMPILE_ONLY_CONFIGURATION_NAME = "compileOnly";
     public static final String RUNTIME_CONFIGURATION_NAME = "runtime";
+    public static final String COMPILE_CLASSPATH_CONFIGURATION_NAME = "compileClasspath";
     public static final String TEST_COMPILE_CONFIGURATION_NAME = "testCompile";
     public static final String TEST_COMPILE_ONLY_CONFIGURATION_NAME = "testCompileOnly";
     public static final String TEST_RUNTIME_CONFIGURATION_NAME = "testRuntime";
+    public static final String TEST_COMPILE_CLASSPATH_CONFIGURATION_NAME = "testCompileClasspath";
 
     public void apply(ProjectInternal project) {
         project.getPluginManager().apply(JavaBasePlugin.class);
@@ -83,7 +83,7 @@ public class JavaPlugin implements Plugin<ProjectInternal> {
         SourceSet main = pluginConvention.getSourceSets().create(SourceSet.MAIN_SOURCE_SET_NAME);
 
         SourceSet test = pluginConvention.getSourceSets().create(SourceSet.TEST_SOURCE_SET_NAME);
-        test.setCompileClasspath(project.files(main.getOutput(), project.getConfigurations().getByName(TEST_COMPILE_ONLY_CONFIGURATION_NAME)));
+        test.setCompileClasspath(project.files(main.getOutput(), project.getConfigurations().getByName(TEST_COMPILE_CLASSPATH_CONFIGURATION_NAME)));
         test.setRuntimeClasspath(project.files(test.getOutput(), main.getOutput(), project.getConfigurations().getByName(TEST_RUNTIME_CONFIGURATION_NAME)));
     }
 
@@ -131,12 +131,6 @@ public class JavaPlugin implements Plugin<ProjectInternal> {
                 test.getConventionMapping().map("classpath", new Callable<Object>() {
                     public Object call() throws Exception {
                         return pluginConvention.getSourceSets().getByName(SourceSet.TEST_SOURCE_SET_NAME).getRuntimeClasspath();
-                    }
-                });
-                test.getConventionMapping().map("testSrcDirs", new Callable<Object>() {
-                    public Object call() throws Exception {
-                        return new ArrayList<File>(pluginConvention.getSourceSets().getByName(SourceSet.TEST_SOURCE_SET_NAME)
-                                .getJava().getSrcDirs());
                     }
                 });
             }

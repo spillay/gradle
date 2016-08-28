@@ -16,6 +16,7 @@
 
 package org.gradle.language.nativeplatform.internal.incremental
 
+import com.google.common.hash.HashCode
 import org.gradle.internal.serialize.SerializerSpec
 import org.gradle.language.nativeplatform.internal.incremental.sourceparser.DefaultInclude
 import org.gradle.language.nativeplatform.internal.incremental.sourceparser.DefaultIncludeDirectives
@@ -48,10 +49,10 @@ class CompilationStateSerializerTest extends SerializerSpec {
     def "serializes file state"() {
         when:
         def fileEmpty = new File("empty")
-        state.fileStates.put(fileEmpty, new CompilationFileState(new byte[0]))
+        state.fileStates.put(fileEmpty, new CompilationFileState(HashCode.fromString("1234")))
 
         def fileTwo = new File("two")
-        def stateTwo = new CompilationFileState("FooBar".getBytes())
+        def stateTwo = new CompilationFileState(HashCode.fromString("2345"))
         stateTwo.includeDirectives = createSourceIncludes("<system>", '"quoted"', "MACRO")
         stateTwo.resolvedIncludes = [resolvedInclude("ONE"), resolvedInclude("TWO")]
         state.fileStates.put(fileTwo, stateTwo)
@@ -62,14 +63,14 @@ class CompilationStateSerializerTest extends SerializerSpec {
         newState.fileStates.size() == 2
 
         def emptyCompileState = newState.getState(fileEmpty)
-        emptyCompileState.hash.length == 0
+        emptyCompileState.hash == HashCode.fromString("1234")
         emptyCompileState.includeDirectives.macroIncludes.empty
         emptyCompileState.includeDirectives.quotedIncludes.empty
         emptyCompileState.includeDirectives.systemIncludes.empty
         emptyCompileState.resolvedIncludes.empty
 
         def otherCompileState = newState.getState(fileTwo)
-        new String(otherCompileState.hash) == "FooBar"
+        otherCompileState.hash == HashCode.fromString("2345")
         otherCompileState.includeDirectives.systemIncludes.collect { it.value } == ["system"]
         otherCompileState.includeDirectives.quotedIncludes.collect { it.value } == ["quoted"]
         otherCompileState.includeDirectives.macroIncludes.collect { it.value } == ["MACRO"]

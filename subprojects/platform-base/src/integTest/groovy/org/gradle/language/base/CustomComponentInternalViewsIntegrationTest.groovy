@@ -99,14 +99,14 @@ class CustomComponentInternalViewsIntegrationTest extends AbstractIntegrationSpe
         class Rules extends RuleSource {
             @Finalize
             void mutateInternal(ModelMap<SampleLibrarySpecInternal> sampleLibs) {
-                sampleLibs.each { sampleLib ->
+                sampleLibs.all { sampleLib ->
                     sampleLib.internalData = "internal"
                 }
             }
 
             @Finalize
             void mutateComponentSpecInternal(ModelMap<VariantComponentSpec> sampleLibs) {
-                sampleLibs.each { sampleLib ->
+                sampleLibs.all { sampleLib ->
                     sampleLib.binaries {
                         sampleBin(JarBinarySpec)
                     }
@@ -115,7 +115,7 @@ class CustomComponentInternalViewsIntegrationTest extends AbstractIntegrationSpe
 
             @Finalize
             void mutatePublic(ModelMap<SampleLibrarySpec> sampleLibs) {
-                sampleLibs.each { sampleLib ->
+                sampleLibs.all { sampleLib ->
                     sampleLib.publicData = "public"
                 }
                 sampleLibs.withType(BareInternalView).all { sampleLib ->
@@ -198,6 +198,6 @@ class CustomComponentInternalViewsIntegrationTest extends AbstractIntegrationSpe
 
         expect:
         def failure = fails("validate")
-        failure.assertHasCause "Factory registration for 'SampleLibrarySpec' is invalid because the implementation type 'DefaultSampleLibrarySpec' does not implement internal view 'NotImplementedInternalView', implementation type was registered by RegisterComponentRules#registerComponent, internal view was registered by RegisterComponentRules#registerInternalView"
+        failure.assertHasCause "Factory registration for 'SampleLibrarySpec' is invalid because the implementation type 'DefaultSampleLibrarySpec' does not implement internal view 'NotImplementedInternalView', implementation type was registered by RegisterComponentRules#registerComponent(TypeBuilder<SampleLibrarySpec>), internal view was registered by RegisterComponentRules#registerInternalView(TypeBuilder<SampleLibrarySpec>)"
     }
 }

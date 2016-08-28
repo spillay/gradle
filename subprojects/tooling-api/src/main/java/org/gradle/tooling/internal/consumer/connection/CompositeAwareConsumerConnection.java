@@ -18,7 +18,7 @@ package org.gradle.tooling.internal.consumer.connection;
 
 import org.gradle.api.Transformer;
 import org.gradle.internal.Cast;
-import org.gradle.tooling.composite.ModelResult;
+import org.gradle.tooling.connection.ModelResult;
 import org.gradle.tooling.internal.adapter.ProtocolToModelAdapter;
 import org.gradle.tooling.internal.consumer.parameters.ConsumerOperationParameters;
 import org.gradle.tooling.internal.consumer.versioning.ModelMapping;
@@ -38,7 +38,8 @@ public class CompositeAwareConsumerConnection extends TestExecutionConsumerConne
 
     @Override
     protected ModelProducer createModelProducer(InternalCancellableConnection connection, ModelMapping modelMapping, ProtocolToModelAdapter adapter, Transformer<RuntimeException, RuntimeException> exceptionTransformer) {
-        return new CompositeAwareModelProducer(adapter, getVersionDetails(), modelMapping, (InternalCompositeAwareConnection) connection, exceptionTransformer);
+        ModelProducer delegate = super.createModelProducer(connection, modelMapping, adapter, exceptionTransformer);
+        return new CompositeAwareModelProducer(delegate, adapter, getVersionDetails(), modelMapping, (InternalCompositeAwareConnection) connection, exceptionTransformer);
     }
 
     protected MultiModelProducer getMultiModelProducer() {

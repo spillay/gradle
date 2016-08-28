@@ -32,7 +32,7 @@ import spock.lang.Unroll
 class TestingIntegrationTest extends AbstractIntegrationSpec {
 
     @Issue("https://issues.gradle.org/browse/GRADLE-1948")
-    @IgnoreIf({GradleContextualExecuter.parallel})
+    @IgnoreIf({ GradleContextualExecuter.parallel })
     def "test interrupting its own thread does not kill test execution"() {
         given:
         buildFile << """
@@ -248,7 +248,7 @@ class TestingIntegrationTest extends AbstractIntegrationSpec {
         when:
         run "othertestsTest"
         then:
-        def result = new DefaultTestExecutionResult(testDirectory)
+        def result = new DefaultTestExecutionResult(testDirectory, 'build', '', '', 'othertestsTest')
         result.assertTestClassesExecuted("TestCaseExtendsAbstractClass")
     }
 
@@ -357,5 +357,65 @@ class TestingIntegrationTest extends AbstractIntegrationSpec {
         result.testClass("TestCase").with {
             assertTestCount(1, 0, 0)
         }
+    }
+
+    def "tests are re-executed when set of candidate classes change"() {
+        given:
+        buildFile << """
+            apply plugin:'java'
+            repositories {
+                mavenCentral()
+            }
+            dependencies {
+                testCompile 'junit:junit:4.12'
+            }
+            test {
+                testLogging {
+                    events "passed", "skipped", "failed"
+                }
+            }
+        """
+
+        and:
+        file("src/test/java/FirstTest.java") << """
+            import org.junit.*;
+            public class FirstTest {
+                @Test public void test() {}
+            }
+        """
+
+        file("src/test/java/SecondTest.java") << """
+            import org.junit.*;
+            public class SecondTest {
+                @Test public void test() {}
+            }
+        """
+
+        when:
+        run "test"
+        then:
+        nonSkippedTasks.contains ":test"
+        output.contains("FirstTest > test PASSED")
+        output.contains("SecondTest > test PASSED")
+
+        when:
+        run "test"
+        then:
+        skippedTasks.contains ":test"
+
+        when:
+        buildFile << """
+        test {
+            filter {
+                includeTestsMatching "First*"
+            }
+        }
+        """
+        then:
+        run "test"
+        then:
+        nonSkippedTasks.contains ":test"
+        output.contains("FirstTest > test PASSED")
+        !output.contains("SecondTest > test PASSED")
     }
 }

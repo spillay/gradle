@@ -19,13 +19,15 @@ package org.gradle.plugins.ide.internal.tooling;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.internal.tasks.TaskContainerInternal;
-import org.gradle.tooling.internal.gradle.DefaultGradleProject;
 import org.gradle.plugins.ide.internal.tooling.model.LaunchableGradleProjectTask;
 import org.gradle.plugins.ide.internal.tooling.model.LaunchableGradleTask;
-import org.gradle.tooling.provider.model.ToolingModelBuilder;
+import org.gradle.tooling.internal.gradle.DefaultGradleProject;
+import org.gradle.tooling.internal.gradle.PartialGradleProject;
+import org.gradle.tooling.provider.model.internal.ProjectToolingModelBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.SortedSet;
 
 import static org.gradle.plugins.ide.internal.tooling.ToolingModelBuilderSupport.buildFromTask;
@@ -33,18 +35,33 @@ import static org.gradle.plugins.ide.internal.tooling.ToolingModelBuilderSupport
 /**
  * Builds the GradleProject that contains the project hierarchy and task information
  */
-public class GradleProjectBuilder implements ToolingModelBuilder {
+public class GradleProjectBuilder implements ProjectToolingModelBuilder {
 
+    @Override
     public boolean canBuild(String modelName) {
         return modelName.equals("org.gradle.tooling.model.GradleProject");
     }
 
+    @Override
     public Object buildAll(String modelName, Project project) {
         return buildHierarchy(project.getRootProject());
     }
 
     public DefaultGradleProject buildAll(Project project) {
         return buildHierarchy(project.getRootProject());
+    }
+
+    @Override
+    public void addModels(String modelName, Project project, Map<String, Object> models) {
+        DefaultGradleProject gradleProject = buildAll(project);
+        addModels(gradleProject, models);
+    }
+
+    private void addModels(PartialGradleProject gradleProject, Map<String, Object> models) {
+        models.put(gradleProject.getPath(), gradleProject);
+        for (PartialGradleProject childProject : gradleProject.getChildren()) {
+            addModels(childProject, models);
+        }
     }
 
     private DefaultGradleProject<LaunchableGradleTask> buildHierarchy(Project project) {

@@ -145,6 +145,26 @@ Root project 'webinar-parent'
         file("build/libs/util-2.5.jar").exists()
     }
 
+    def "singleModule with explicit project dir"() {
+        setup:
+        resources.maybeCopy('MavenConversionIntegrationTest/singleModule')
+        def workingDir = temporaryFolder.createDir("workingDir")
+        when:
+        executer.inDirectory(workingDir).usingProjectDirectory(file('.'))
+        run 'init'
+
+        then:
+        gradleFilesGenerated()
+
+        when:
+        //TODO this build should fail because the TestNG test is failing
+        //however the plugin does not generate testNG for single module project atm (bug)
+        //def failure = runAndFail('clean', 'build')  //assert if fails for the right reason
+        run 'clean', 'build'
+        then:
+        file("build/libs/util-2.5.jar").exists()
+    }
+
     def "testjar"() {
         when:
         run 'init'
@@ -314,7 +334,7 @@ Root project 'webinar-parent'
     }
 
     def libRequest(MavenHttpRepository repo, String group, String name, Object version) {
-        MavenHttpModule module = repo.module(group, name, version)
+        MavenHttpModule module = repo.module(group, name, version as String)
         module.allowAll()
     }
 

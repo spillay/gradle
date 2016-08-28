@@ -17,34 +17,44 @@
 package org.gradle.api.internal.tasks.testing.worker;
 
 import org.gradle.api.Action;
+import org.gradle.api.internal.classpath.ModuleRegistry;
 import org.gradle.api.internal.tasks.testing.TestClassProcessor;
 import org.gradle.api.internal.tasks.testing.TestClassRunInfo;
 import org.gradle.api.internal.tasks.testing.TestResultProcessor;
 import org.gradle.api.internal.tasks.testing.WorkerTestClassProcessorFactory;
-import org.gradle.internal.Factory;
-import org.gradle.messaging.remote.ObjectConnection;
+import org.gradle.internal.operations.BuildOperationWorkerRegistry;
+import org.gradle.internal.remote.ObjectConnection;
 import org.gradle.process.JavaForkOptions;
-import org.gradle.process.internal.WorkerProcess;
-import org.gradle.process.internal.WorkerProcessBuilder;
+import org.gradle.process.internal.worker.WorkerProcess;
+import org.gradle.process.internal.worker.WorkerProcessBuilder;
+import org.gradle.process.internal.worker.WorkerProcessFactory;
+import org.gradle.util.CollectionUtils;
 
 import java.io.File;
+import java.net.URL;
+import java.util.List;
 
 public class ForkingTestClassProcessor implements TestClassProcessor {
-    private final Factory<WorkerProcessBuilder> workerFactory;
+    private final WorkerProcessFactory workerFactory;
     private final WorkerTestClassProcessorFactory processorFactory;
     private final JavaForkOptions options;
     private final Iterable<File> classPath;
     private final Action<WorkerProcessBuilder> buildConfigAction;
+    private final ModuleRegistry moduleRegistry;
+    private final BuildOperationWorkerRegistry.Operation owner;
     private RemoteTestClassProcessor remoteProcessor;
     private WorkerProcess workerProcess;
     private TestResultProcessor resultProcessor;
+    private BuildOperationWorkerRegistry.Completion workerCompletion;
 
-    public ForkingTestClassProcessor(Factory<WorkerProcessBuilder> workerFactory, WorkerTestClassProcessorFactory processorFactory, JavaForkOptions options, Iterable<File> classPath, Action<WorkerProcessBuilder> buildConfigAction) {
+    public ForkingTestClassProcessor(WorkerProcessFactory workerFactory, WorkerTestClassProcessorFactory processorFactory, JavaForkOptions options, Iterable<File> classPath, Action<WorkerProcessBuilder> buildConfigAction, ModuleRegistry moduleRegistry, BuildOperationWorkerRegistry.Operation owner) {
         this.workerFactory = workerFactory;
         this.processorFactory = processorFactory;
         this.options = options;
         this.classPath = classPath;
         this.buildConfigAction = buildConfigAction;
+        this.moduleRegistry = moduleRegistry;
+        this.owner = owner;
     }
 
     @Override
@@ -55,6 +65,7 @@ public class ForkingTestClassProcessor implements TestClassProcessor {
     @Override
     public void processTestClass(TestClassRunInfo testClass) {
         if (remoteProcessor == null) {
+            workerCompletion = owner.operationStart();
             remoteProcessor = forkProcess();
         }
 
@@ -62,11 +73,10 @@ public class ForkingTestClassProcessor implements TestClassProcessor {
     }
 
     RemoteTestClassProcessor forkProcess() {
-        WorkerProcessBuilder builder = workerFactory.create();
+        WorkerProcessBuilder builder = workerFactory.create(new TestWorker(processorFactory));
         builder.setBaseName("Gradle Test Executor");
+        builder.setImplementationClasspath(getTestWorkerImplementationClasspath());
         builder.applicationClasspath(classPath);
-        builder.setLoadApplicationInSystemClassLoader(true);
-        builder.worker(new TestWorker(processorFactory));
         options.copyTo(builder.getJavaCommand());
         buildConfigAction.execute(builder);
 
@@ -74,7 +84,7 @@ public class ForkingTestClassProcessor implements TestClassProcessor {
         workerProcess.start();
 
         ObjectConnection connection = workerProcess.getConnection();
-        connection.useParameterSerializer(TestEventSerializer.create());
+        connection.useParameterSerializers(TestEventSerializer.create());
         connection.addIncoming(TestResultProcessor.class, resultProcessor);
         RemoteTestClassProcessor remoteProcessor = connection.addOutgoing(RemoteTestClassProcessor.class);
         connection.connect();
@@ -82,11 +92,35 @@ public class ForkingTestClassProcessor implements TestClassProcessor {
         return remoteProcessor;
     }
 
+    List<URL> getTestWorkerImplementationClasspath() {
+        return CollectionUtils.flattenCollections(URL.class,
+            moduleRegistry.getModule("gradle-core").getImplementationClasspath().getAsURLs(),
+            moduleRegistry.getModule("gradle-logging").getImplementationClasspath().getAsURLs(),
+            moduleRegistry.getModule("gradle-messaging").getImplementationClasspath().getAsURLs(),
+            moduleRegistry.getModule("gradle-base-services").getImplementationClasspath().getAsURLs(),
+            moduleRegistry.getModule("gradle-cli").getImplementationClasspath().getAsURLs(),
+            moduleRegistry.getModule("gradle-native").getImplementationClasspath().getAsURLs(),
+            moduleRegistry.getModule("gradle-testing-base").getImplementationClasspath().getAsURLs(),
+            moduleRegistry.getModule("gradle-testing-jvm").getImplementationClasspath().getAsURLs(),
+            moduleRegistry.getExternalModule("guava-jdk5").getImplementationClasspath().getAsURLs(),
+            moduleRegistry.getExternalModule("slf4j-api").getImplementationClasspath().getAsURLs(),
+            moduleRegistry.getExternalModule("jul-to-slf4j").getImplementationClasspath().getAsURLs(),
+            moduleRegistry.getExternalModule("native-platform").getImplementationClasspath().getAsURLs(),
+            moduleRegistry.getExternalModule("kryo").getImplementationClasspath().getAsURLs(),
+            moduleRegistry.getExternalModule("commons-lang").getImplementationClasspath().getAsURLs(),
+            moduleRegistry.getExternalModule("junit").getImplementationClasspath().getAsURLs()
+        );
+    }
+
     @Override
     public void stop() {
         if (remoteProcessor != null) {
-            remoteProcessor.stop();
-            workerProcess.waitForStop();
+            try {
+                remoteProcessor.stop();
+                workerProcess.waitForStop();
+            } finally {
+                workerCompletion.operationFinish();
+            }
         }
     }
 }

@@ -71,4 +71,28 @@ class JULRedirectorIntegrationTest extends AbstractIntegrationSpec {
             testResult.testClass("com.example.LumberJackTest").assertStderr(containsString(it));
         }
     }
+
+    /* Relies on the resources directory:
+     * integTest/resources/org/gradle/api/internal/tasks/testing/loggingConfig
+     */
+    def defaultLoggingConfigNoFineLevelWhenDisabled() {
+        given:
+        testResources.maybeCopy('JULRedirectorIntegrationTest/loggingConfig')
+        buildFile << """
+            test {
+                systemProperty 'java.util.logging.config.file', 'src/test/resources/logging.properties'
+                systemProperty 'org.gradle.readLoggingConfigFile', 'false'
+            }
+        """
+
+        when:
+        executer.expectDeprecationWarning()
+        run("test")
+
+        then:
+        DefaultTestExecutionResult testResult = new DefaultTestExecutionResult(testDirectory);
+        LYRICS.each {
+            testResult.testClass("com.example.LumberJackTest").assertStderr(not(containsString(it)));
+        }
+    }
 }

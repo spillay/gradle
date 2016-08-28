@@ -23,6 +23,7 @@ import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.internal.ErroringAction;
 import org.gradle.jvm.tasks.api.internal.ApiClassExtractor;
+import org.gradle.util.internal.Java9ClassReader;
 import org.objectweb.asm.ClassReader;
 
 import java.io.BufferedOutputStream;
@@ -63,9 +64,8 @@ import static org.gradle.internal.IoActions.withResource;
  * {@link UnsupportedOperationException} in the unlikely event that they are present on
  * the classpath and invoked at runtime.</p>
  *
- * <p>The inputs to this task are Java class files which must be provided via one of the
- * many {@link org.gradle.api.tasks.TaskInputs#sourceDir(Object)} and
- * {@link org.gradle.api.tasks.TaskInputs#source(Object)} overloads.</p>
+ * <p>The inputs to this task are Java class files which must be provided via
+ * {@link org.gradle.api.tasks.TaskInputs}.</p>
  *
  * @since 2.10
  * @see org.gradle.jvm.plugins.JvmComponentPlugin
@@ -117,7 +117,7 @@ public class ApiJar extends DefaultTask {
                         if (!isClassFile(sourceFile)) {
                             continue;
                         }
-                        ClassReader classReader = new ClassReader(readFileToByteArray(sourceFile));
+                        ClassReader classReader = new Java9ClassReader(readFileToByteArray(sourceFile));
                         if (!apiClassExtractor.shouldExtractApiClassFrom(classReader)) {
                             continue;
                         }

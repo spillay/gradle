@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Test execution
+sourceCompatibility = 1.6
 
 dependencies {
     compile project(':core')
@@ -27,7 +29,7 @@ dependencies {
     testCompile 'com.google.inject:guice:2.0@jar' // this is for TestNG
 }
 
-test {
+configure([test, java9Test]) {
     exclude 'org/gradle/api/internal/tasks/testing/junit/ATestClass*.*'
     exclude 'org/gradle/api/internal/tasks/testing/junit/ABroken*TestClass*.*'
 }
@@ -35,6 +37,7 @@ test {
 useTestFixtures()
 useTestFixtures(project: ':testingBase', sourceSet: 'testFixtures')
 useTestFixtures(project: ':diagnostics')
+useTestFixtures(project: ":messaging")
 
 // TODO: re-enable if we are ready to do breaking changes, because this subproject includes classes migrated from the "plugins" subproject
 //useClassycle()

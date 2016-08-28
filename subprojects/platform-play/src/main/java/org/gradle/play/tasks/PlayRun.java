@@ -22,12 +22,19 @@ import org.gradle.api.file.FileCollection;
 import org.gradle.api.internal.ConventionTask;
 import org.gradle.api.tasks.InputFile;
 import org.gradle.api.tasks.InputFiles;
+import org.gradle.api.tasks.Internal;
+import org.gradle.api.tasks.Nested;
+import org.gradle.api.tasks.OrderSensitive;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.compile.BaseForkOptions;
 import org.gradle.deployment.internal.DeploymentRegistry;
-import org.gradle.logging.ProgressLogger;
-import org.gradle.logging.ProgressLoggerFactory;
-import org.gradle.play.internal.run.*;
+import org.gradle.internal.logging.progress.ProgressLogger;
+import org.gradle.internal.logging.progress.ProgressLoggerFactory;
+import org.gradle.play.internal.run.DefaultPlayRunSpec;
+import org.gradle.play.internal.run.PlayApplicationDeploymentHandle;
+import org.gradle.play.internal.run.PlayApplicationRunner;
+import org.gradle.play.internal.run.PlayApplicationRunnerToken;
+import org.gradle.play.internal.run.PlayRunSpec;
 import org.gradle.play.internal.toolchain.PlayToolProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,7 +49,7 @@ import java.util.Set;
  */
 @Incubating
 public class PlayRun extends ConventionTask {
-    private static Logger logger = LoggerFactory.getLogger(PlayRun.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(PlayRun.class);
 
     private int httpPort;
 
@@ -55,9 +62,11 @@ public class PlayRun extends ConventionTask {
     @InputFiles
     private Set<File> assetsDirs;
 
+    @OrderSensitive
     @InputFiles
     private FileCollection runtimeClasspath;
 
+    @OrderSensitive
     @InputFiles
     private FileCollection changingClasspath;
 
@@ -68,6 +77,7 @@ public class PlayRun extends ConventionTask {
     /**
      * fork options for the running a Play application.
      */
+    @Nested
     public BaseForkOptions getForkOptions() {
         if (forkOptions == null) {
             forkOptions = new BaseForkOptions();
@@ -96,15 +106,15 @@ public class PlayRun extends ConventionTask {
 
         if (!getProject().getGradle().getStartParameter().isContinuous()) {
             ProgressLogger progressLogger = progressLoggerFactory.newOperation(PlayRun.class)
-                .start(String.format("Run Play App at http://localhost:%d/", httpPort),
-                    String.format("Running at http://localhost:%d/", httpPort));
+                .start("Run Play App at http://localhost:" + httpPort + "/",
+                    "Running at http://localhost:"+ httpPort + "/");
             try {
                 waitForCtrlD();
             } finally {
                 progressLogger.completed();
             }
         } else {
-            logger.warn(String.format("Running Play App (%s) at http://localhost:%d/", getPath(), httpPort));
+            LOGGER.warn("Running Play App ({}) at http://localhost:{}/", getPath(), httpPort);
         }
     }
 
@@ -114,7 +124,7 @@ public class PlayRun extends ConventionTask {
                 int c = System.in.read();
                 if (c == -1 || c == 4) {
                     // STOP on Ctrl-D or EOF.
-                    logger.info("received end of stream (ctrl+d)");
+                    LOGGER.info("received end of stream (ctrl+d)");
                     return;
                 }
             } catch (IOException e) {
@@ -130,6 +140,7 @@ public class PlayRun extends ConventionTask {
      *
      * @return HTTP port
      */
+    @Internal
     public int getHttpPort() {
         return httpPort;
     }

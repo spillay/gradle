@@ -16,11 +16,16 @@
 package org.gradle.api.internal.artifacts.ivyservice.ivyresolve;
 
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
-import org.gradle.api.internal.artifacts.ivyservice.*;
-import org.gradle.internal.component.model.*;
+import org.gradle.api.internal.artifacts.ivyservice.CacheLockingManager;
 import org.gradle.api.internal.component.ArtifactType;
+import org.gradle.internal.component.model.ComponentArtifactMetadata;
+import org.gradle.internal.component.model.ComponentOverrideMetadata;
+import org.gradle.internal.component.model.ComponentResolveMetadata;
+import org.gradle.internal.component.model.DependencyMetadata;
+import org.gradle.internal.component.model.ModuleSource;
 import org.gradle.internal.resolve.result.BuildableArtifactResolveResult;
 import org.gradle.internal.resolve.result.BuildableArtifactSetResolveResult;
+import org.gradle.internal.resolve.result.BuildableComponentArtifactsResolveResult;
 import org.gradle.internal.resolve.result.BuildableModuleComponentMetaDataResolveResult;
 import org.gradle.internal.resolve.result.BuildableModuleVersionListingResolveResult;
 
@@ -56,42 +61,46 @@ public class CacheLockReleasingModuleComponentsRepository extends BaseModuleComp
             this.cacheLockingManager = cacheLockingManager;
         }
 
-        public void listModuleVersions(final DependencyMetaData dependency, final BuildableModuleVersionListingResolveResult result) {
-            cacheLockingManager.longRunningOperation(String.format("List %s using repository %s", dependency, name), new Runnable() {
+        @Override
+        public void listModuleVersions(final DependencyMetadata dependency, final BuildableModuleVersionListingResolveResult result) {
+            cacheLockingManager.longRunningOperation("List " + dependency + " using repository " + name, new Runnable() {
                 public void run() {
                     delegate.listModuleVersions(dependency, result);
                 }
             });
         }
 
+        @Override
         public void resolveComponentMetaData(final ModuleComponentIdentifier moduleComponentIdentifier,
                                              final ComponentOverrideMetadata requestMetaData, final BuildableModuleComponentMetaDataResolveResult result) {
-            cacheLockingManager.longRunningOperation(String.format("Resolve %s using repository %s", moduleComponentIdentifier, name), new Runnable() {
+            cacheLockingManager.longRunningOperation("Resolve " + moduleComponentIdentifier + " using repository " + name, new Runnable() {
                 public void run() {
                     delegate.resolveComponentMetaData(moduleComponentIdentifier, requestMetaData, result);
                 }
             });
         }
 
-        public void resolveModuleArtifacts(final ComponentResolveMetaData component, final ArtifactType artifactType, final BuildableArtifactSetResolveResult result) {
-            cacheLockingManager.longRunningOperation(String.format("Resolve %s for %s using repository %s", artifactType, component, name), new Runnable() {
+        @Override
+        public void resolveArtifactsWithType(final ComponentResolveMetadata component, final ArtifactType artifactType, final BuildableArtifactSetResolveResult result) {
+            cacheLockingManager.longRunningOperation("Resolve " + artifactType + " for " + component + " using repository " + name, new Runnable() {
                 public void run() {
-                    delegate.resolveModuleArtifacts(component, artifactType, result);
+                    delegate.resolveArtifactsWithType(component, artifactType, result);
                 }
             });
         }
 
-        public void resolveModuleArtifacts(final ComponentResolveMetaData component, final ComponentUsage componentUsage, final BuildableArtifactSetResolveResult result) {
-            cacheLockingManager.longRunningOperation(String.format("Resolve %s for %s using repository %s", componentUsage, component, name), new Runnable() {
+        @Override
+        public void resolveArtifacts(final ComponentResolveMetadata component, final BuildableComponentArtifactsResolveResult result) {
+            cacheLockingManager.longRunningOperation("Resolve artifacts for " + component + " using repository " + name, new Runnable() {
                 public void run() {
-                    delegate.resolveModuleArtifacts(component, componentUsage, result);
+                    delegate.resolveArtifacts(component, result);
                 }
             });
         }
 
-
-        public void resolveArtifact(final ComponentArtifactMetaData artifact, final ModuleSource moduleSource, final BuildableArtifactResolveResult result) {
-            cacheLockingManager.longRunningOperation(String.format("Download %s using repository %s", artifact, name), new Runnable() {
+        @Override
+        public void resolveArtifact(final ComponentArtifactMetadata artifact, final ModuleSource moduleSource, final BuildableArtifactResolveResult result) {
+            cacheLockingManager.longRunningOperation("Download " + artifact + " using repository " + name, new Runnable() {
                 public void run() {
                     delegate.resolveArtifact(artifact, moduleSource, result);
                 }

@@ -1,5 +1,4 @@
 allprojects {
-    def antBuilder = it.services.get(org.gradle.api.internal.project.IsolatedAntBuilder)
     ext.useClassycle = { params = [:] ->
         def excludePatterns = params.exclude ?: []
 
@@ -24,6 +23,7 @@ allprojects {
                     if (!sourceSet.output.classesDir.directory) {
                         return;
                     }
+                    def antBuilder = it.services.get(org.gradle.api.internal.project.IsolatedAntBuilder)
                     antBuilder.withClasspath(configurations.classycle.files).execute {
                         ant.taskdef(name: "classycleDependencyCheck", classname: "classycle.ant.DependencyCheckingTask")
                         ant.taskdef(name: "classycleReport", classname: "classycle.ant.ReportTask")
@@ -55,7 +55,7 @@ allprojects {
                                 e2.printStackTrace()
                             }
                             def clickableUrl = {
-                                new org.gradle.logging.ConsoleRenderer().asClickableFileUrl(it)
+                                new URI("file", "", it.toURI().getPath(), null, null).toString()
                             }
                             throw new RuntimeException("Classycle check failed: $e.message. See failure report at ${clickableUrl(reportFile)} and analysis report at ${clickableUrl(analysisFile)}", e)
                         }

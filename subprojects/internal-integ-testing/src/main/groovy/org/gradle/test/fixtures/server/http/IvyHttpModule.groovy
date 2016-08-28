@@ -17,6 +17,7 @@
 package org.gradle.test.fixtures.server.http
 
 import org.gradle.test.fixtures.HttpModule
+import org.gradle.test.fixtures.Module
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.test.fixtures.ivy.IvyDescriptor
 import org.gradle.test.fixtures.ivy.IvyFileModule
@@ -35,12 +36,22 @@ class IvyHttpModule implements RemoteIvyModule, HttpModule {
         this.backingModule = backingModule
     }
 
+    @Override
+    String getGroup() {
+        return backingModule.group
+    }
+
     String getOrganisation() {
         return backingModule.organisation
     }
 
     String getModule() {
         return backingModule.module
+    }
+
+    @Override
+    String getVersion() {
+        return backingModule.version
     }
 
     String getRevision() {
@@ -93,6 +104,18 @@ class IvyHttpModule implements RemoteIvyModule, HttpModule {
 
     IvyHttpModule dependsOn(Map<String, ?> attributes) {
         backingModule.dependsOn(attributes)
+        return this
+    }
+
+    @Override
+    IvyHttpModule dependsOn(Module module) {
+        backingModule.dependsOn(module)
+        return this
+    }
+
+    @Override
+    IvyHttpModule dependsOn(Map<String, ?> attributes, Module module) {
+        backingModule.dependsOn(attributes, module)
         return this
     }
 

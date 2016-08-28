@@ -50,7 +50,7 @@ model {
         succeeds "components"
 
         then:
-        outputMatches output, """
+        outputMatches """
 JVM library 'someLib'
 ---------------------
 
@@ -76,7 +76,6 @@ Binaries
 """
     }
 
-    @Requires(TestPrecondition.JDK7_OR_LATER)
     def "shows details of jvm library with multiple targets"() {
         given:
         buildFile << """
@@ -97,7 +96,7 @@ Binaries
         succeeds "components"
 
         then:
-        outputMatches output, """
+        outputMatches """
 JVM library 'myLib'
 -------------------
 
@@ -160,7 +159,7 @@ Binaries
         succeeds "components"
 
         then:
-        outputMatches output, """
+        outputMatches """
 JVM library 'myLib'
 -------------------
 
@@ -254,7 +253,7 @@ model {
         succeeds "components"
 
         then:
-        outputMatches output, """
+        outputMatches """
 JVM library 'someLib'
 ---------------------
 
@@ -347,7 +346,7 @@ model {
         succeeds "components"
 
         then:
-        outputMatches output, """
+        outputMatches """
 JVM library 'someLib'
 ---------------------
 

@@ -18,11 +18,8 @@ package org.gradle.integtests.samples
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.Sample
 import org.gradle.test.fixtures.file.TestFile
-import org.gradle.util.Requires
-import org.gradle.util.TestPrecondition
 import org.junit.Rule
 
-@Requires(TestPrecondition.JDK7_OR_LATER)
 class SamplesCodeQualityIntegrationTest extends AbstractIntegrationSpec {
     @Rule public final Sample sample = new Sample(temporaryFolder, 'codeQuality')
 
@@ -31,11 +28,17 @@ class SamplesCodeQualityIntegrationTest extends AbstractIntegrationSpec {
         TestFile buildDir = projectDir.file('build')
 
         when:
-        executer.inDirectory(projectDir).requireGradleHome().withTasks('check').run()
+        executer.inDirectory(projectDir).requireGradleDistribution().withTasks('check').run()
 
         then:
-        buildDir.file('reports/checkstyle/main.xml').assertIsFile()
+        buildDir.file('reports/checkstyle/main.xml').assertDoesNotExist()
+        buildDir.file('reports/checkstyle/main.html').assertIsFile()
         buildDir.file('reports/codenarc/main.html').assertIsFile()
         buildDir.file('reports/codenarc/test.html').assertIsFile()
+        buildDir.file('reports/findbugs/main.html').assertIsFile()
+        buildDir.file('reports/jdepend/main.xml').assertIsFile()
+        buildDir.file('reports/jdepend/test.xml').assertIsFile()
+        buildDir.file('reports/pmd/main.html').assertIsFile()
+        buildDir.file('reports/pmd/main.xml').assertIsFile()
     }
 }

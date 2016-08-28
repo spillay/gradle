@@ -51,23 +51,15 @@ public abstract class AbstractCompatibilityTestRunner extends AbstractMultiTestR
         validateTestName(target);
 
         previous = new ArrayList<GradleDistribution>();
-        final ReleasedVersionDistributions previousVersions = new ReleasedVersionDistributions();
+        final ReleasedVersionDistributions releasedVersions = new ReleasedVersionDistributions();
         if (versionStr.equals("latest")) {
-            previous.add(previousVersions.getMostRecentFinalRelease());
             implicitVersion = true;
+            addVersionIfCompatibleWithJvmAndOs(releasedVersions.getMostRecentFinalRelease());
         } else if (versionStr.equals("all")) {
             implicitVersion = true;
-            List<GradleDistribution> all = previousVersions.getAll();
-            for (GradleDistribution previous : all) {
-                if (!previous.worksWith(Jvm.current())) {
-                    add(new IgnoredVersion(previous, "does not work with current JVM"));
-                    continue;
-                }
-                if (!previous.worksWith(OperatingSystem.current())) {
-                    add(new IgnoredVersion(previous, "does not work with current OS"));
-                    continue;
-                }
-                this.previous.add(previous);
+            List<GradleDistribution> previousVersionsToTest = choosePreviousVersionsToTest(releasedVersions);
+            for (GradleDistribution previousVersion : previousVersionsToTest) {
+                addVersionIfCompatibleWithJvmAndOs(previousVersion);
             }
         } else if (versionStr.matches("^\\d.*$")) {
             implicitVersion = false;
@@ -80,7 +72,7 @@ public abstract class AbstractCompatibilityTestRunner extends AbstractMultiTestR
 
             inject(previous, gradleVersions, new Action<InjectionStep<List<GradleDistribution>, GradleVersion>>() {
                 public void execute(InjectionStep<List<GradleDistribution>, GradleVersion> step) {
-                    GradleDistribution distribution = previousVersions.getDistribution(step.getItem());
+                    GradleDistribution distribution = releasedVersions.getDistribution(step.getItem());
                     if (distribution == null) {
                         throw new RuntimeException("Gradle version '" + step.getItem().getVersion() + "' is not a valid testable released version");
                     }
@@ -91,6 +83,18 @@ public abstract class AbstractCompatibilityTestRunner extends AbstractMultiTestR
             throw new RuntimeException("Invalid value for " + VERSIONS_SYSPROP_NAME + " system property: " + versionStr + "(valid values: 'all', 'latest' or comma separated list of versions)");
         }
     }
+
+    private void addVersionIfCompatibleWithJvmAndOs(GradleDistribution previousVersion) {
+        if (!previousVersion.worksWith(Jvm.current())) {
+            add(new IgnoredVersion(previousVersion, "does not work with current JVM"));
+        } else if (!previousVersion.worksWith(OperatingSystem.current())) {
+            add(new IgnoredVersion(previousVersion, "does not work with current OS"));
+        } else {
+            this.previous.add(previousVersion);
+        }
+    }
+
+    protected abstract List<GradleDistribution> choosePreviousVersionsToTest(ReleasedVersionDistributions previousVersions);
 
     /**
      * Makes sure the test adhers to the naming convention.

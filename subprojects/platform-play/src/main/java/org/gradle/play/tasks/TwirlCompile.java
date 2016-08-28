@@ -23,6 +23,9 @@ import org.gradle.api.file.FileVisitDetails;
 import org.gradle.api.file.FileVisitor;
 import org.gradle.api.internal.file.RelativeFile;
 import org.gradle.api.tasks.Input;
+import org.gradle.api.tasks.Internal;
+import org.gradle.api.tasks.Nested;
+import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.SourceTask;
 import org.gradle.api.tasks.TaskAction;
@@ -69,6 +72,7 @@ public class TwirlCompile extends SourceTask {
     /**
      * fork options for the twirl compiler.
      */
+    @Nested
     public BaseForkOptions getForkOptions() {
         if (forkOptions == null) {
             forkOptions = new BaseForkOptions();
@@ -104,6 +108,7 @@ public class TwirlCompile extends SourceTask {
      * Returns the default imports that will be used when compiling templates.
      * @return The imports that will be used.
      */
+    @Optional @Input
     public TwirlImports getDefaultImports() {
         return defaultImports;
     }
@@ -145,6 +150,7 @@ public class TwirlCompile extends SourceTask {
         }
     }
 
+    @Internal
     private Compiler<TwirlCompileSpec> getCompiler() {
         ToolProvider toolProvider = ((PlayToolChainInternal) getToolChain()).select(platform);
         return toolProvider.newCompiler(TwirlCompileSpec.class);
@@ -196,7 +202,7 @@ public class TwirlCompile extends SourceTask {
         File calculateOutputFile(File inputFile) {
             String inputFileName = inputFile.getName();
             String[] splits = inputFileName.split("\\.");
-            String relativeOutputFilePath = String.format("views/%s/%s.template.scala", splits[2], splits[0]); //TODO: use Twirl library instead?
+            String relativeOutputFilePath = "views/" + splits[2]+ "/" + splits[0] + ".template.scala"; //TODO: use Twirl library instead?
             return new File(destinationDir, relativeOutputFilePath);
         }
     }

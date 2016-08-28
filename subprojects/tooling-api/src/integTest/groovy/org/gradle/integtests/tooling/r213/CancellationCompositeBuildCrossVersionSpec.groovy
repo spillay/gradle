@@ -15,29 +15,30 @@
  */
 
 package org.gradle.integtests.tooling.r213
+
 import org.gradle.integtests.tooling.fixture.CompositeToolingApiSpecification
+import org.gradle.integtests.tooling.fixture.TargetGradleVersion
 import org.gradle.test.fixtures.server.http.CyclicBarrierHttpServer
 import org.gradle.tooling.BuildCancelledException
 import org.gradle.tooling.GradleConnectionException
 import org.gradle.tooling.GradleConnector
 import org.gradle.tooling.ResultHandler
+import org.gradle.tooling.connection.ModelResults
 import org.gradle.tooling.model.eclipse.EclipseProject
 import org.junit.Rule
-
 /**
  * Tests cancellation of model requests in a composite build.
  */
+@TargetGradleVersion(">=2.1")
 class CancellationCompositeBuildCrossVersionSpec extends CompositeToolingApiSpecification {
     @Rule CyclicBarrierHttpServer server = new CyclicBarrierHttpServer()
 
-    def "can cancel model operation while a participant request is being processed"() {
-        given:
-        def cancelledFile = file("cancelled")
-        def executedAfterCancellingFile = file("executed")
-        def participantCancelledFile = file("participant_cancelled")
-        def buildFileText = """
+    def cancellationHookText(File cancelledFile, File executedAfterCancellingFile) {
+        """
         import org.gradle.initialization.BuildCancellationToken
         import java.util.concurrent.CountDownLatch
+
+        if (!project.hasProperty('waitForCancellation')) { return } // Ignore this stuff when we're creating the composite context
 
         def cancellationToken = services.get(BuildCancellationToken.class)
 
@@ -52,12 +53,24 @@ class CancellationCompositeBuildCrossVersionSpec extends CompositeToolingApiSpec
         cancellationToken.addCallback {
             latch.countDown()
         }
+        """
+    }
 
+    def cancellationBlockingText(File participantCancelledFile) {
+        """
         println "Connecting to server..."
         new URL('${server.uri}').text
         latch.await()
         file('${participantCancelledFile.toURI()}') << "participant \${project.name} cancelled\\n"
-"""
+        """
+    }
+
+    def "can cancel model operation while a participant request is being processed"() {
+        given:
+        def cancelledFile = file("cancelled")
+        def executedAfterCancellingFile = file("executed")
+        def participantCancelledFile = file("participant_cancelled")
+        def buildFileText = cancellationHookText(cancelledFile, executedAfterCancellingFile) + cancellationBlockingText(participantCancelledFile)
         def build1 = populate("build-1") {
             buildFile << buildFileText
         }
@@ -73,6 +86,7 @@ class CancellationCompositeBuildCrossVersionSpec extends CompositeToolingApiSpec
         withCompositeConnection([build1, build2, build3]) { connection ->
             def modelBuilder = connection.models(EclipseProject)
             modelBuilder.withCancellationToken(cancellationToken.token())
+            modelBuilder.withArguments("-PwaitForCancellation")
             // async ask for results
             modelBuilder.get(resultHandler)
             // wait for model requests to start
@@ -84,14 +98,20 @@ class CancellationCompositeBuildCrossVersionSpec extends CompositeToolingApiSpec
         }
 
         then:
-        resultHandler.result instanceof BuildCancelledException
+        // overall operation "succeeded"
+        resultHandler.failure == null
+        resultHandler.result.size() == 3
+        // each individual request failed
+        resultHandler.result.each { result ->
+            assertFailureHasCause(result.failure, BuildCancelledException)
+        }
         // participant should be properly cancelled
         participantCancelledFile.exists()
         // no new builds should have been executed after cancelling
         !executedAfterCancellingFile.exists()
     }
 
-    def "check that no participant requests are started at all when token is initially cancelled"() {
+    def "check that no participant model requests are started at all when token is initially cancelled"() {
         given:
         def executedAfterCancellingFile = file("executed")
         def buildFileText = """
@@ -115,13 +135,45 @@ class CancellationCompositeBuildCrossVersionSpec extends CompositeToolingApiSpec
         }
 
         then:
-        resultHandler.result instanceof BuildCancelledException
+        resultHandler.failure instanceof BuildCancelledException
+        resultHandler.result == null
         !executedAfterCancellingFile.exists()
     }
 
+    def "check that no participant tasks are started at all when token is initially cancelled"() {
+        given:
+        def executedAfterCancellingFile = file("executed")
+        def buildFileText = """
+        file("${executedAfterCancellingFile.toURI()}").text = << "executed \${project.name}\\n"
+        throw new RuntimeException("Build should not get executed")
+"""
+        def build1 = populate("build-1") {
+            buildFile << buildFileText
+            buildFile << "task run {}"
+        }
+        def build2 = populate("build-2") {
+            buildFile << buildFileText
+        }
+        when:
+        def cancellationToken = GradleConnector.newCancellationTokenSource()
+        def resultHandler = new ResultCollector()
+        cancellationToken.cancel()
+        withCompositeConnection([build1, build2]) { connection ->
+            def buildLauncher = connection.newBuild()
+            buildLauncher.forTasks(build1, "run")
+            buildLauncher.withCancellationToken(cancellationToken.token())
+            buildLauncher.run(resultHandler)
+        }
+
+        then:
+        resultHandler.failure instanceof BuildCancelledException
+        resultHandler.result == null
+        !executedAfterCancellingFile.exists()
+    }
 
     static class ResultCollector implements ResultHandler {
-        def result
+        ModelResults result
+        GradleConnectionException failure
 
         @Override
         void onComplete(Object result) {
@@ -130,7 +182,7 @@ class CancellationCompositeBuildCrossVersionSpec extends CompositeToolingApiSpec
 
         @Override
         void onFailure(GradleConnectionException failure) {
-            this.result = failure
+            this.failure = failure
         }
     }
 }

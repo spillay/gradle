@@ -23,11 +23,9 @@ import org.gradle.internal.concurrent.ExecutorFactory;
 import org.gradle.internal.jvm.UnsupportedJavaRuntimeException;
 import org.gradle.internal.service.DefaultServiceRegistry;
 import org.gradle.tooling.CancellationTokenSource;
-import org.gradle.tooling.composite.GradleBuild;
-import org.gradle.tooling.composite.GradleConnection;
-import org.gradle.tooling.internal.composite.DefaultGradleBuildBuilder;
-import org.gradle.tooling.internal.composite.DefaultGradleConnectionBuilder;
-import org.gradle.tooling.internal.composite.GradleConnectionFactory;
+import org.gradle.tooling.connection.GradleConnectionBuilder;
+import org.gradle.tooling.internal.connection.DefaultGradleConnectionBuilder;
+import org.gradle.tooling.internal.connection.GradleConnectionFactory;
 import org.gradle.tooling.internal.consumer.loader.CachingToolingImplementationLoader;
 import org.gradle.tooling.internal.consumer.loader.DefaultToolingImplementationLoader;
 import org.gradle.tooling.internal.consumer.loader.SynchronizedToolingImplementationLoader;
@@ -37,27 +35,22 @@ public class ConnectorServices {
     private static DefaultServiceRegistry singletonRegistry = new ConnectorServiceRegistry();
 
     public static DefaultGradleConnector createConnector() {
-        assertJava6();
+        checkJavaVersion();
         return singletonRegistry.getFactory(DefaultGradleConnector.class).create();
     }
 
-    public static GradleConnection.Builder createGradleConnectionBuilder() {
-        assertJava6();
-        return singletonRegistry.getFactory(GradleConnection.Builder.class).create();
-    }
-
-    public static GradleBuild.Builder createGradleBuildBuilder() {
-        assertJava6();
-        return singletonRegistry.getFactory(GradleBuild.Builder.class).create();
+    public static GradleConnectionBuilder createGradleConnectionBuilder() {
+        checkJavaVersion();
+        return singletonRegistry.getFactory(GradleConnectionBuilder.class).create();
     }
 
     public static CancellationTokenSource createCancellationTokenSource() {
-        assertJava6();
+        checkJavaVersion();
         return new DefaultCancellationTokenSource();
     }
 
     public static void close() {
-        assertJava6();
+        checkJavaVersion();
         singletonRegistry.close();
     }
 
@@ -69,11 +62,8 @@ public class ConnectorServices {
         singletonRegistry = new ConnectorServiceRegistry();
     }
 
-    private static void assertJava6() {
-        JavaVersion javaVersion = JavaVersion.current();
-        if (!javaVersion.isJava6Compatible()) {
-            throw UnsupportedJavaRuntimeException.usingUnsupportedVersion("Gradle Tooling API", JavaVersion.VERSION_1_6);
-        }
+    private static void checkJavaVersion() {
+        UnsupportedJavaRuntimeException.assertUsingVersion("Gradle Tooling API", JavaVersion.VERSION_1_7);
     }
 
     private static class ConnectorServiceRegistry extends DefaultServiceRegistry {
@@ -85,18 +75,10 @@ public class ConnectorServices {
             };
         }
 
-        protected Factory<GradleConnection.Builder> createGradleConnectionBuilder(final GradleConnectionFactory gradleConnectionFactory, final DistributionFactory distributionFactory) {
-            return new Factory<GradleConnection.Builder>() {
-                public GradleConnection.Builder create() {
+        protected Factory<GradleConnectionBuilder> createGradleConnectionBuilder(final GradleConnectionFactory gradleConnectionFactory, final DistributionFactory distributionFactory) {
+            return new Factory<GradleConnectionBuilder>() {
+                public GradleConnectionBuilder create() {
                     return new DefaultGradleConnectionBuilder(gradleConnectionFactory, distributionFactory);
-                }
-            };
-        }
-
-        protected Factory<GradleBuild.Builder> createGradleBuildBuilder() {
-            return new Factory<GradleBuild.Builder>() {
-                public GradleBuild.Builder create() {
-                    return new DefaultGradleBuildBuilder();
                 }
             };
         }

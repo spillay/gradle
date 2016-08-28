@@ -1,4 +1,9 @@
+
+// Compiler daemon
+sourceCompatibility = 1.6
+
 dependencies {
+    compile project(":core")
     compile project(":platformJvm")
     compile project(":languageJava")
 
@@ -8,6 +13,6 @@ dependencies {
     integTestRuntime project(':plugins')
 }
 
-useClassycle(exclude: ["org/gradle/api/internal/tasks/compile/**"])
+useClassycle(exclude: ["org/gradle/api/internal/tasks/compile/**", "org/gradle/api/tasks/javadoc/**"])
 useTestFixtures()
 useTestFixtures(project: ':languageJvm', sourceSet: 'integTest')

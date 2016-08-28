@@ -15,6 +15,7 @@
  */
 package org.gradle.plugins.ide.api;
 
+import org.gradle.api.tasks.Internal;
 import org.gradle.internal.xml.XmlTransformer;
 import org.gradle.plugins.ide.internal.generator.generator.PersistableConfigurationObject;
 import org.gradle.plugins.ide.internal.generator.generator.PersistableConfigurationObjectGenerator;
@@ -29,17 +30,20 @@ public abstract class XmlGeneratorTask<T extends PersistableConfigurationObject>
 
     public XmlGeneratorTask() {
         generator = new PersistableConfigurationObjectGenerator<T>() {
+            @Override
             public T create() {
                 return XmlGeneratorTask.this.create();
             }
 
+            @Override
             public void configure(T object) {
                 XmlGeneratorTask.this.configure(object);
             }
         };
     }
 
-    protected XmlTransformer getXmlTransformer() {
+    @Internal
+    public XmlTransformer getXmlTransformer() {
         return xmlTransformer;
     }
 

@@ -19,7 +19,6 @@ import org.gradle.integtests.fixtures.Sample
 import org.gradle.internal.os.OperatingSystem
 import org.gradle.nativeplatform.fixtures.AbstractInstalledToolChainIntegrationSpec
 import org.gradle.nativeplatform.fixtures.RequiresInstalledToolChain
-import org.gradle.test.fixtures.file.LeaksFileHandles
 import org.gradle.test.fixtures.file.TestDirectoryProvider
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.gradle.util.Requires
@@ -29,7 +28,6 @@ import org.junit.Rule
 import static org.gradle.nativeplatform.fixtures.ToolChainRequirement.GCC_COMPATIBLE
 
 @Requires(TestPrecondition.CAN_INSTALL_EXECUTABLE)
-@LeaksFileHandles
 class NativePlatformSamplesIntegrationTest extends AbstractInstalledToolChainIntegrationSpec {
     @Rule final TestNameTestDirectoryProvider testDirProvider = new TestNameTestDirectoryProvider()
     @Rule public final Sample cppLib = sample(testDirProvider, 'cpp-lib')
@@ -141,11 +139,11 @@ class NativePlatformSamplesIntegrationTest extends AbstractInstalledToolChainInt
         final debugIA64 = executable(variants.dir.file("build/exe/main/itanium/debug/main"))
         final releaseIA64 = executable(variants.dir.file("build/exe/main/itanium/release/main"))
 
-        debugX86.binaryInfo.arch.name == "x86"
+        debugX86.arch.name == "x86"
         debugX86.assertDebugFileExists()
         debugX86.exec().out == "Hello world!\n"
 
-        releaseX86.binaryInfo.arch.name == "x86"
+        releaseX86.arch.name == "x86"
         releaseX86.assertDebugFileDoesNotExist()
         releaseX86.exec().out == "Hello world!\n"
 
@@ -154,8 +152,8 @@ class NativePlatformSamplesIntegrationTest extends AbstractInstalledToolChainInt
             debugX64.assertDoesNotExist()
             releaseX64.assertDoesNotExist()
         } else {
-            debugX64.binaryInfo.arch.name == "x86_64"
-            releaseX64.binaryInfo.arch.name == "x86_64"
+            debugX64.arch.name == "x86_64"
+            releaseX64.arch.name == "x86_64"
         }
 
         // Itanium not built
@@ -219,7 +217,7 @@ model {
 
         then:
         executable(targetPlatforms.dir.file("build/exe/main/arm/main")).exec().out == "Hello from ${toolChain.typeDisplayName}!\n"
-        executable(targetPlatforms.dir.file("build/exe/main/arm/main")).binaryInfo.arch.isI386()
+        executable(targetPlatforms.dir.file("build/exe/main/arm/main")).arch.isI386()
 
         executable(targetPlatforms.dir.file("build/exe/main/sparc/main")).exec().out == "Hello from ${toolChain.typeDisplayName}!\n"
     }

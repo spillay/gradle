@@ -23,7 +23,12 @@ import org.gradle.api.internal.plugins.PluginRegistry
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.internal.tasks.options.OptionReader
 import org.gradle.cache.CacheRepository
-import org.gradle.execution.*
+import org.gradle.execution.BuildConfigurationActionExecuter
+import org.gradle.execution.BuildExecuter
+import org.gradle.execution.DefaultBuildExecuter
+import org.gradle.execution.ProjectConfigurer
+import org.gradle.execution.TaskGraphExecuter
+import org.gradle.execution.TaskSelector
 import org.gradle.execution.taskgraph.DefaultTaskGraphExecuter
 import org.gradle.initialization.BuildCancellationToken
 import org.gradle.internal.TimeProvider

@@ -22,7 +22,7 @@ import org.gradle.api.artifacts.component.ProjectComponentSelector;
 public class DefaultProjectComponentSelector implements ProjectComponentSelector {
     private final String projectPath;
 
-    public DefaultProjectComponentSelector(String projectPath) {
+    private DefaultProjectComponentSelector(String projectPath) {
         assert projectPath != null : "project path cannot be null";
         this.projectPath = projectPath;
     }
@@ -76,5 +76,17 @@ public class DefaultProjectComponentSelector implements ProjectComponentSelector
 
     public static ProjectComponentSelector newSelector(String projectPath) {
         return new DefaultProjectComponentSelector(projectPath);
+    }
+
+    public static ProjectComponentSelector newSelector(String build, String projectPath) {
+        return new DefaultProjectComponentSelector(build + ":" + projectPath);
+    }
+
+    public static ProjectComponentSelector newSelector(ProjectComponentIdentifier projectId) {
+        return new DefaultProjectComponentSelector(projectId.getProjectPath());
+    }
+
+    public static ProjectComponentSelector newSelector(String build, ProjectComponentSelector selector) {
+        return new DefaultProjectComponentSelector(build + ":" + selector.getProjectPath());
     }
 }

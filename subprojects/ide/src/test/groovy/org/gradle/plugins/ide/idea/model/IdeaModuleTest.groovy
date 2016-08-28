@@ -16,35 +16,20 @@
 
 package org.gradle.plugins.ide.idea.model
 
-import org.gradle.api.internal.project.DefaultProject
+import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.plugins.JavaPlugin
 import org.gradle.plugins.ide.idea.IdeaPlugin
+import org.gradle.test.fixtures.AbstractProjectBuilderSpec
 import org.gradle.util.TestUtil
-import spock.lang.Specification
 
-class IdeaModuleTest extends Specification {
-    private final DefaultProject rootProject = TestUtil.createRootProject()
-    private final DefaultProject moduleProject = TestUtil.createChildProject(rootProject, "child", new File("."))
+class IdeaModuleTest extends AbstractProjectBuilderSpec {
+    private final ProjectInternal rootProject = TestUtil.createRootProject(temporaryFolder.testDirectory)
+    private final ProjectInternal moduleProject = TestUtil.createChildProject(rootProject, "child", new File("."))
 
     def "language level is null for non java projects"() {
         given:
         rootProject.getPlugins().apply(JavaPlugin)
         rootProject.getPlugins().apply(IdeaPlugin)
-        def iml = Mock(IdeaModuleIml)
-        def module = new IdeaModule(moduleProject, iml)
-        expect:
-        module.languageLevel == null
-    }
-
-    def "language level is null if idea project language level is explicitly set"() {
-        given:
-        rootProject.getPlugins().apply(IdeaPlugin)
-        rootProject.getPlugins().apply(JavaPlugin)
-        rootProject.idea.project.languageLevel = 1.6
-        moduleProject.getPlugins().apply(JavaPlugin)
-        moduleProject.sourceCompatibility = 1.7
-        rootProject.sourceCompatibility = 1.8
-
         def iml = Mock(IdeaModuleIml)
         def module = new IdeaModule(moduleProject, iml)
         expect:

@@ -19,8 +19,8 @@ package org.gradle.api.internal.tasks.testing.logging;
 import org.gradle.api.tasks.testing.TestDescriptor;
 import org.gradle.api.tasks.testing.TestListener;
 import org.gradle.api.tasks.testing.TestResult;
-import org.gradle.logging.ProgressLogger;
-import org.gradle.logging.ProgressLoggerFactory;
+import org.gradle.internal.logging.progress.ProgressLogger;
+import org.gradle.internal.logging.progress.ProgressLoggerFactory;
 import org.gradle.util.TextUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -88,6 +88,7 @@ public class TestCountLogger implements TestListener {
             progressLogger = factory.newOperation(TestCountLogger.class);
             progressLogger.setDescription("Run tests");
             progressLogger.started();
+            progressLogger.progress(summary());
         }
     }
 

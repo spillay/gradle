@@ -1,1 +1,4 @@
-rootProject.name = 'y'
+rootProject.name = 'B'
+
+include ':b1'
+include ':b2'

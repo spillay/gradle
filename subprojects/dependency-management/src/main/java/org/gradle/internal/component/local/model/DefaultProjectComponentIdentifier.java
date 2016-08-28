@@ -15,16 +15,18 @@
  */
 package org.gradle.internal.component.local.model;
 
+import org.gradle.api.Project;
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
+import org.gradle.api.artifacts.component.ProjectComponentSelector;
 
 public class DefaultProjectComponentIdentifier implements ProjectComponentIdentifier {
     private final String projectPath;
     private final String displayName;
 
-    public DefaultProjectComponentIdentifier(String projectPath) {
+    private DefaultProjectComponentIdentifier(String projectPath) {
         assert projectPath != null : "project path cannot be null";
         this.projectPath = projectPath;
-        displayName = String.format("project %s", projectPath);
+        displayName = "project " + projectPath;
     }
 
     public String getDisplayName() {
@@ -63,7 +65,32 @@ public class DefaultProjectComponentIdentifier implements ProjectComponentIdenti
         return displayName;
     }
 
-    public static ProjectComponentIdentifier newId(String projectPath) {
+    public static ProjectComponentIdentifier newProjectId(String projectPath) {
         return new DefaultProjectComponentIdentifier(projectPath);
+    }
+
+    public static ProjectComponentIdentifier newProjectId(String build, String projectPath) {
+        return new DefaultProjectComponentIdentifier(build + ":" + projectPath);
+    }
+
+    public static ProjectComponentIdentifier newProjectId(String build, ProjectComponentIdentifier projectId) {
+        return new DefaultProjectComponentIdentifier(build + ":" + projectId.getProjectPath());
+    }
+
+    public static ProjectComponentIdentifier newProjectId(ProjectComponentSelector selector) {
+        return new DefaultProjectComponentIdentifier(selector.getProjectPath());
+    }
+
+    public static ProjectComponentIdentifier newProjectId(Project project) {
+        return new DefaultProjectComponentIdentifier(project.getPath());
+    }
+
+    public static ProjectComponentIdentifier rootId(ProjectComponentIdentifier projectComponentIdentifier) {
+        String path = projectComponentIdentifier.getProjectPath();
+        if (path.contains("::")) {
+            String buildName = path.split("::", 2)[0];
+            return newProjectId(buildName, ":");
+        }
+        return newProjectId(":");
     }
 }

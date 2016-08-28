@@ -19,13 +19,11 @@ import org.gradle.nativeplatform.fixtures.AbstractInstalledToolChainIntegrationS
 import org.gradle.nativeplatform.fixtures.app.CppHelloWorldApp
 import org.gradle.nativeplatform.fixtures.app.ExeWithDiamondDependencyHelloWorldApp
 import org.gradle.nativeplatform.fixtures.app.ExeWithLibraryUsingLibraryHelloWorldApp
-import org.gradle.test.fixtures.file.LeaksFileHandles
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
 import spock.lang.Unroll
 
 @Requires(TestPrecondition.CAN_INSTALL_EXECUTABLE)
-@LeaksFileHandles
 class LibraryDependenciesIntegrationTest extends AbstractInstalledToolChainIntegrationSpec {
     def "setup"() {
         settingsFile << "rootProject.name = 'test'"
@@ -89,9 +87,9 @@ project(":other") {
 
         where:
         label                                  | dependencyNotation                      | description                                                | useCauseDescription
-        "does not exist"                       | "library: 'unknown'"                    | "Could not locate library 'unknown'."                      | false
+        "does not exist"                       | "library: 'unknown'"                    | "Could not locate library 'unknown' required by 'main' in project ':exe'."                      | false
         "project that does not exist"          | "project: ':unknown', library: 'hello'" | "Project with path ':unknown' not found."                  | true
-        "does not exist in referenced project" | "project: ':other', library: 'unknown'" | "Could not locate library 'unknown' for project ':other'." | false
+        "does not exist in referenced project" | "project: ':other', library: 'unknown'" | "Could not locate library 'unknown' in project ':other' required by 'main' in project ':exe'." | false
     }
 
     @Unroll
@@ -123,7 +121,7 @@ model {
 
         where:
         notationName | notation
-        "direct"     | "comp.hello"
+        "direct"     | "\$.components.hello"
         "map"        | "library: 'hello'"
     }
 
@@ -137,7 +135,7 @@ model {
         and:
         buildFile << """
 model {
-    components { comp ->
+    components {
         hello(NativeLibrarySpec)
         main(NativeExecutableSpec) {
             binaries.all { binary ->
@@ -156,7 +154,7 @@ model {
 
         where:
         notationName | notation
-        "direct"     | "comp.hello"
+        "direct"     | "\$.components.hello"
         "map"        | "library: 'hello'"
     }
 
@@ -423,7 +421,11 @@ model {
         staticLibrary("build/libs/greetings/static/greetings").assertExists()
 
         and:
-        println executable("build/exe/main/main").binaryInfo.listLinkedLibraries()
-        println sharedLibrary("build/libs/hello/shared/hello").binaryInfo.listLinkedLibraries()
+        try {
+            println executable("build/exe/main/main").binaryInfo.listLinkedLibraries()
+            println sharedLibrary("build/libs/hello/shared/hello").binaryInfo.listLinkedLibraries()
+        } catch (UnsupportedOperationException ignored) {
+            // Toolchain doesn't support it.
+        }
     }
 }

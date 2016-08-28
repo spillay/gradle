@@ -19,11 +19,11 @@ package org.gradle.plugins.ear
 import org.gradle.api.JavaVersion
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.test.fixtures.archive.JarTestFixture
-import org.gradle.util.TextUtil
 import org.hamcrest.Matchers
+import spock.lang.Issue
 import spock.lang.Unroll
 
-import static org.testng.Assert.assertEquals
+import static org.gradle.util.TextUtil.toPlatformLineSeparators
 
 class EarPluginIntegrationTest extends AbstractIntegrationSpec {
 
@@ -100,8 +100,8 @@ dependencies {
         def appXml = new XmlSlurper().parse(
                 file('unzipped/META-INF/application.xml'))
         def modules = appXml.module
-        assertEquals(modules[0].ejb.text(), 'moduleA.jar')
-        assertEquals(modules[1].web.'web-uri'.text(), 'moduleB.war')
+        modules[0].ejb.text() == 'moduleA.jar'
+        modules[1].web.'web-uri'.text() == 'moduleB.war'
     }
 
     @Unroll
@@ -112,15 +112,17 @@ dependencies {
             xsi = xsi.reverse()
         }
 
-        def applicationXml = """<?xml version="1.0"?>
+        // Use platform line separators here, so that we get the same result for customMetaInf and default.
+        // The default application.xml file is generated (using the supplied content), and always contains platform line separators
+        def applicationXml = toPlatformLineSeparators("""<?xml version="1.0"?>
 <application xmlns="http://java.sun.com/xml/ns/javaee" ${xsi.join(" ")} version="6">
   <application-name>customear</application-name>
   <display-name>displayname</display-name>
-  <library-directory>mylib</library-directory>
+  <library-directory>mylib-$metaInfFolder</library-directory>
 </application>
-"""
+""")
 
-        file('META-INF/application.xml').createFile().write(applicationXml)
+        file("$metaInfFolder/application.xml").createFile().write(applicationXml)
         buildFile << """
 apply plugin: 'ear'
 ear {
@@ -133,8 +135,7 @@ ear {
 
         then:
         def ear = new JarTestFixture(file('build/libs/root.ear'))
-        // Since the application.xml file is generated (using the supplied content), it uses platform line separators
-        ear.assertFileContent("META-INF/application.xml", TextUtil.toPlatformLineSeparators(applicationXml))
+        ear.assertFileContent("META-INF/application.xml", applicationXml)
 
         where:
         location                      | metaInfFolder   | appConfig
@@ -259,10 +260,142 @@ ear {
         def appXml = new XmlSlurper().parse(
                 file('unzipped/META-INF/application.xml'))
         def roles = appXml."security-role"
-        assertEquals(roles[0]."role-name".text(), 'superman')
-        assertEquals(roles[0].description.text(), 'This is the SUPERMAN role')
-        assertEquals(roles[1]."role-name".text(), 'supergirl')
-        assertEquals(roles[1].description.text(), 'This is the SUPERGIRL role')
+        roles[0]."role-name".text() == 'superman'
+        roles[0].description.text() == 'This is the SUPERMAN role'
+        roles[1]."role-name".text() == 'supergirl'
+        roles[1].description.text() == 'This is the SUPERGIRL role'
     }
 
+    @Issue("GRADLE-3471")
+    def "does not fail when an ear has a war to deploy and a module defined with the same path"() {
+        buildFile << """
+apply plugin: 'ear'
+apply plugin: 'war'
+
+dependencies {
+    deploy files(tasks.war)
+}
+
+ear {
+    deploymentDescriptor {
+        applicationName = "OurAppName"
+        webModule("root.war", "anywhere")
+    }
+}
+
+"""
+        when:
+        run 'assemble'
+        and:
+        file("build/libs/root.ear").unzipTo(file("unzipped"))
+
+        then:
+        def ear = new JarTestFixture(file('build/libs/root.ear'))
+        ear.assertContainsFile("META-INF/MANIFEST.MF")
+        ear.assertContainsFile("META-INF/application.xml")
+        def appXml = new XmlSlurper().parse(file('unzipped/META-INF/application.xml'))
+        def module = appXml.module[0].web
+        module."web-uri" == "root.war"
+        module."context-root" == "anywhere"
+    }
+
+    @Issue("GRADLE-3486")
+    def "does not fail when provided with an existing descriptor without a version attribute"() {
+        given:
+        buildScript '''
+            apply plugin: 'ear'
+        '''.stripIndent()
+        createDir('src/main/application/META-INF') {
+            file('application.xml').text = '''
+                <?xml version="1.0"?>
+                <application xmlns="http://java.sun.com/xml/ns/javaee" xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/application_6.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+                </application>
+            '''.stripIndent().trim()
+        }
+
+        when:
+        run 'assemble'
+
+        then:
+        def ear = new JarTestFixture(file('build/libs/root.ear'))
+        ear.assertContainsFile("META-INF/application.xml")
+    }
+
+    def "does not fail when initializeInOrder is null"() {
+        given:
+        buildScript '''
+            apply plugin: 'ear'
+            ear {
+                deploymentDescriptor {
+                    initializeInOrder = null
+                }
+            }
+        '''.stripIndent()
+
+        when:
+        run 'assemble'
+
+        then:
+        def ear = new JarTestFixture(file('build/libs/root.ear'))
+        ear.assertContainsFile("META-INF/application.xml")
+    }
+
+    @Issue("GRADLE-3497")
+    def "does not fail when provided with an existing descriptor with security roles without description"() {
+        given:
+        buildScript '''
+            apply plugin: 'ear'
+        '''.stripIndent()
+        createDir('src/main/application/META-INF') {
+            file('application.xml').text = '''
+                <application>
+                  <security-role>
+                    <role-name>ROLE_ADMINISTRATOR</role-name>
+                  </security-role>
+                  <security-role>
+                    <role-name>ROLE_USER</role-name>
+                  </security-role>
+                </application>
+            '''.stripIndent().trim()
+        }
+
+        when:
+        run 'assemble'
+
+        then:
+        def ear = new JarTestFixture(file('build/libs/root.ear'))
+        ear.assertContainsFile("META-INF/application.xml")
+    }
+
+    @Issue("GRADLE-3497")
+    @Unroll
+    def "does not fail when provided with an existing descriptor with a web module without #missing"() {
+        given:
+        buildScript '''
+            apply plugin: 'ear'
+        '''.stripIndent()
+        createDir('src/main/application/META-INF') {
+            file('application.xml').text = """
+                <application>
+                  <module>
+                    <web>
+                      $webModuleContent
+                    </web>
+                  </module>
+                </application>
+            """.stripIndent().trim()
+        }
+
+        when:
+        run 'assemble'
+
+        then:
+        def ear = new JarTestFixture(file('build/libs/root.ear'))
+        ear.assertContainsFile("META-INF/application.xml")
+
+        where:
+        missing        | webModuleContent
+        'web-uri'      | '<context-root>Test</context-root>'
+        'context-root' | '<web-uri>My.war</web-uri>'
+    }
 }

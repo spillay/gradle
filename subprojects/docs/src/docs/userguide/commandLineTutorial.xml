@@ -18,7 +18,7 @@
     <para>This chapter introduces the basics of the Gradle command-line. You run a build using the
         <command>gradle</command> command, which you have already seen in action in previous chapters.</para>
 
-    <section>
+    <section id="sec:executing_multiple_tasks">
         <title>Executing multiple tasks</title>
         <para>You can execute multiple tasks in a single build by listing each of the tasks on the command-line. For example,
             the command <userinput>gradle compile test</userinput> will execute the <literal>compile</literal> and
@@ -72,7 +72,7 @@
         </para>
     </section>
 
-    <section>
+    <section id="sec:task_name_abbreviation">
         <title>Task name abbreviation</title>
         <para>When you specify tasks on the command-line, you don't have to provide the full name of the task. You only need to provide enough of the
             task name to uniquely identify the task. For example, in the sample build above, you can execute task
@@ -106,6 +106,29 @@
         </sample>
     </section>
 
+    <section id="sec:rerun_tasks">
+        <title>Forcing tasks to execute</title>
+        <para>
+            Many tasks, particularly those provided by Gradle itself, support <link linkend="sec:up_to_date_checks">incremental builds</link>.
+            Such tasks can determine whether they need to run or not based on whether their inputs or outputs have changed since the last
+            time they ran. You can easily identify tasks that take part in incremental build when Gradle displays
+            the text <literal>UP-TO-DATE</literal> next to their name during a build run.
+        </para>
+        <para>
+            You may on occasion want to force Gradle to run all the tasks, ignoring any up-to-date checks. If that's the case, simply use
+            the <literal>--rerun-tasks</literal> option. Here's the output when running a task both without and with <literal>--rerun-tasks</literal>:
+        </para>
+        <sample id="rerunTasks" dir="userguide/tutorial/rerun" title="Forcing tasks to run">
+            <test args="doIt" />
+            <output args="doIt" ignoreExtraLines="y" outputFile="noRerunTasks.out" />
+            <output args="--rerun-tasks doIt" ignoreExtraLines="y" />
+        </sample>
+        <para>
+            Note that this will force <emphasis>all</emphasis> required tasks to execute, not just the ones you specify on the command
+            line. It's a little like running a <literal>clean</literal>, but without the build's generated output being deleted.
+        </para>
+    </section>
+
     <section id="sec:obtaining_information_about_your_build">
         <title>Obtaining information about your build</title>
         <para>Gradle provides several built-in tasks which show particular details of your build. This can be
@@ -115,7 +138,7 @@
             <link linkend="project_reports_plugin">project report plugin</link> to add tasks to your project which will
             generate these reports.
         </para>
-        <section>
+        <section id="sec:listing_projects">
             <title>Listing projects</title>
             <para>Running <userinput>gradle projects</userinput> gives you a list of the sub-projects of the selected project,
                 displayed in a hierarchy. Here is an example:
@@ -255,7 +278,7 @@
             execution.
         </para>
     </section>
-    <section>
+    <section id="sec:cli_tutorial_summary">
         <title>Summary</title>
         <para>In this chapter, you have seen some of the things you can do with Gradle from the command-line. You can
             find out more about the <command>gradle</command> command in <xref linkend="gradle_command_line"/>.</para>

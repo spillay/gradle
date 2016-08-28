@@ -103,14 +103,14 @@ class CustomBinaryInternalViewsIntegrationTest extends AbstractIntegrationSpec {
         class Rules extends RuleSource {
             @Finalize
             void mutateInternal(@Path("binaries") ModelMap<SampleBinarySpecInternal> sampleBins) {
-                sampleBins.each { sampleBin ->
+                sampleBins.all { sampleBin ->
                     sampleBin.internalData = "internal"
                 }
             }
 
             @Finalize
             void mutatePublic(@Path("binaries") ModelMap<SampleBinarySpec> sampleBins) {
-                sampleBins.each { sampleBin ->
+                sampleBins.all { sampleBin ->
                     sampleBin.publicData = "public"
                 }
                 sampleBins.withType(BareInternal) { sampleBin ->
@@ -233,7 +233,7 @@ class CustomBinaryInternalViewsIntegrationTest extends AbstractIntegrationSpec {
 
         expect:
         def failure = fails("components")
-        failure.assertHasCause "Factory registration for 'SampleBinarySpec' is invalid because the implementation type 'DefaultSampleBinarySpec' does not implement internal view 'NotImplementedInternalView', implementation type was registered by RegisterBinaryRules#registerBinary, internal view was registered by RegisterBinaryRules#registerInternalView"
+        failure.assertHasCause "Factory registration for 'SampleBinarySpec' is invalid because the implementation type 'DefaultSampleBinarySpec' does not implement internal view 'NotImplementedInternalView', implementation type was registered by RegisterBinaryRules#registerBinary(TypeBuilder<SampleBinarySpec>), internal view was registered by RegisterBinaryRules#registerInternalView(TypeBuilder<SampleBinarySpec>)"
     }
 
     def "can register managed internal view for JarBinarySpec"() {

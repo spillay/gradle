@@ -19,7 +19,16 @@ package org.gradle.api.tasks.javadoc;
 import groovy.lang.Closure;
 import org.gradle.api.Incubating;
 import org.gradle.api.file.FileCollection;
-import org.gradle.api.tasks.*;
+import org.gradle.api.tasks.Input;
+import org.gradle.api.tasks.InputFiles;
+import org.gradle.api.tasks.Internal;
+import org.gradle.api.tasks.Nested;
+import org.gradle.api.tasks.Optional;
+import org.gradle.api.tasks.OrderSensitive;
+import org.gradle.api.tasks.OutputDirectory;
+import org.gradle.api.tasks.ParallelizableTask;
+import org.gradle.api.tasks.SourceTask;
+import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.javadoc.internal.JavadocSpec;
 import org.gradle.external.javadoc.MinimalJavadocOptions;
 import org.gradle.external.javadoc.StandardJavadocDocletOptions;
@@ -161,6 +170,7 @@ public class Javadoc extends SourceTask {
         throw new UnsupportedOperationException();
     }
 
+    @Internal
     private JavaPlatform getPlatform() {
         return DefaultJavaPlatform.current();
     }
@@ -170,8 +180,17 @@ public class Javadoc extends SourceTask {
      *
      * @return The directory.
      */
-    @OutputDirectory
+    @Internal
     public File getDestinationDir() {
+        return destinationDir;
+    }
+
+    @OutputDirectory
+    protected File getOutputDirectory() {
+        File destinationDir = getDestinationDir();
+        if (destinationDir == null) {
+            destinationDir = options.getDestinationDirectory();
+        }
         return destinationDir;
     }
 
@@ -185,6 +204,7 @@ public class Javadoc extends SourceTask {
     /**
      * Returns the amount of memory allocated to this task.
      */
+    @Optional @Input
     public String getMaxMemory() {
         return maxMemory;
     }
@@ -221,6 +241,7 @@ public class Javadoc extends SourceTask {
      *
      * @see #setVerbose(boolean)
      */
+    @Internal
     public boolean isVerbose() {
         return options.isVerbose();
     }
@@ -242,6 +263,7 @@ public class Javadoc extends SourceTask {
      *
      * @return The classpath.
      */
+    @OrderSensitive
     @InputFiles
     public FileCollection getClasspath() {
         return classpath;
@@ -297,6 +319,7 @@ public class Javadoc extends SourceTask {
         this.failOnError = failOnError;
     }
 
+    @Internal
     public File getOptionsFile() {
         return new File(getTemporaryDir(), "javadoc.options");
     }

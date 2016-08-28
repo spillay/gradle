@@ -18,7 +18,6 @@ package org.gradle.integtests.resolve.ivy
 import org.gradle.integtests.fixtures.AbstractHttpDependencyResolutionTest
 
 class IvyBrokenRemoteResolveIntegrationTest extends AbstractHttpDependencyResolutionTest {
-
     public void "reports and recovers from missing module"() {
         given:
         def repo = ivyHttpRepo("repo1")
@@ -48,7 +47,7 @@ Searched in the following locations:
     ${module.ivy.uri}
     ${module.jar.uri}
 Required by:
-""")
+    project :""")
 
         when:
         module.ivy.expectGetMissing()
@@ -63,12 +62,18 @@ Searched in the following locations:
     ${module.ivy.uri}
     ${module.jar.uri}
 Required by:
-""")
+    project :""")
 
         when:
         server.resetExpectations()
         module.ivy.expectGet()
         module.jar.expectGet()
+
+        then:
+        succeeds('showMissing')
+
+        when:
+        server.resetExpectations()
 
         then:
         succeeds('showMissing')
@@ -107,13 +112,13 @@ Searched in the following locations:
     ${moduleA.ivy.uri}
     ${moduleA.jar.uri}
 Required by:
-""")
+    project :""")
                 .assertHasCause("""Could not find group:projectB:1.0-milestone-9.
 Searched in the following locations:
     ${moduleB.ivy.uri}
     ${moduleB.jar.uri}
 Required by:
-""")
+    project :""")
 
         when:
         server.resetExpectations()
@@ -121,6 +126,96 @@ Required by:
         moduleA.jar.expectGet()
         moduleB.ivy.expectGet()
         moduleB.jar.expectGet()
+
+        then:
+        succeeds('showMissing')
+
+        when:
+        server.resetExpectations()
+
+        then:
+        succeeds('showMissing')
+    }
+
+    public void "reports and recovers from multiple missing transitive modules"() {
+        settingsFile << "include 'child1'"
+
+        given:
+        def repo = ivyHttpRepo("repo1")
+        def moduleA = repo.module("group", "projectA", "1.2").publish()
+        def moduleB = repo.module("group", "projectB", "1.0-milestone-9").publish()
+        def moduleC = repo.module("group", "projectC", "0.99")
+            .dependsOn(moduleA)
+            .publish()
+        def moduleD = repo.module("group", "projectD", "1.0GA")
+            .dependsOn(moduleA)
+            .dependsOn(moduleB)
+            .publish()
+
+        buildFile << """
+allprojects {
+    repositories {
+        ivy { url "${repo.uri}"}
+    }
+    configurations {
+        compile
+        'default' {
+            extendsFrom(compile)
+        }
+    }
+}
+dependencies {
+    compile 'group:projectC:0.99'
+    compile project(':child1')
+}
+project(':child1') {
+    dependencies {
+        compile 'group:projectD:1.0GA'
+    }
+}
+task showMissing << { println configurations.compile.files }
+"""
+
+        when:
+        moduleA.ivy.expectGetMissing()
+        moduleA.jar.expectHeadMissing()
+        moduleB.ivy.expectGetMissing()
+        moduleB.jar.expectHeadMissing()
+        moduleC.ivy.expectGet()
+        moduleD.ivy.expectGet()
+
+        then:
+        fails("showMissing")
+        failure.assertHasDescription('Execution failed for task \':showMissing\'.')
+                .assertResolutionFailure(':compile')
+                .assertHasCause("""Could not find group:projectA:1.2.
+Searched in the following locations:
+    ${moduleA.ivy.uri}
+    ${moduleA.jar.uri}
+Required by:
+    project : > group:projectC:0.99
+    project : > project :child1 > group:projectD:1.0GA""")
+                .assertHasCause("""Could not find group:projectB:1.0-milestone-9.
+Searched in the following locations:
+    ${moduleB.ivy.uri}
+    ${moduleB.jar.uri}
+Required by:
+    project : > project :child1 > group:projectD:1.0GA""")
+
+        when:
+        server.resetExpectations()
+        moduleA.ivy.expectGet()
+        moduleA.jar.expectGet()
+        moduleB.ivy.expectGet()
+        moduleB.jar.expectGet()
+        moduleC.jar.expectGet()
+        moduleD.jar.expectGet()
+
+        then:
+        succeeds('showMissing')
+
+        when:
+        server.resetExpectations()
 
         then:
         succeeds('showMissing')
@@ -162,6 +257,12 @@ Required by:
         server.resetExpectations()
         module.ivy.expectGet()
         artifact.expectGet()
+
+        then:
+        succeeds('showMissing')
+
+        when:
+        server.resetExpectations()
 
         then:
         succeeds('showMissing')
@@ -212,6 +313,12 @@ Required by:
 
         then:
         succeeds('showMissing')
+
+        when:
+        server.resetExpectations()
+
+        then:
+        succeeds('showMissing')
     }
 
     public void "reports and recovers from missing module when no repositories defined"() {
@@ -238,6 +345,12 @@ task showMissing << { println configurations.missing.files }
 
         module.ivy.expectGet()
         module.jar.expectGet()
+
+        then:
+        succeeds('showMissing')
+
+        when:
+        server.resetExpectations()
 
         then:
         succeeds('showMissing')
@@ -275,6 +388,12 @@ task showBroken << { println configurations.broken.files }
         server.resetExpectations()
         module.ivy.expectGet()
         module.jar.expectGet()
+
+        then:
+        succeeds("showBroken")
+
+        when:
+        server.resetExpectations()
 
         then:
         succeeds("showBroken")
@@ -356,6 +475,13 @@ task retrieve(type: Sync) {
         when:
         server.resetExpectations()
         module.jar.expectGet()
+
+        then:
+        succeeds "retrieve"
+        file('libs').assertHasDescendants('projectA-1.2.jar')
+
+        when:
+        server.resetExpectations()
 
         then:
         succeeds "retrieve"

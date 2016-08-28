@@ -18,27 +18,30 @@ package org.gradle.plugins.ide.internal.tooling.idea
 
 import org.gradle.api.JavaVersion
 import org.gradle.api.Project
+import org.gradle.api.internal.artifacts.ivyservice.projectmodule.LocalComponentRegistry
+import org.gradle.api.internal.composite.CompositeBuildContext
 import org.gradle.api.plugins.GroovyPlugin
 import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.plugins.scala.ScalaPlugin
 import org.gradle.internal.jvm.Jvm
+import org.gradle.internal.service.DefaultServiceRegistry
 import org.gradle.plugins.ide.idea.IdeaPlugin
 import org.gradle.plugins.ide.internal.tooling.GradleProjectBuilder
 import org.gradle.plugins.ide.internal.tooling.IdeaModelBuilder
+import org.gradle.test.fixtures.AbstractProjectBuilderSpec
+import org.gradle.testfixtures.ProjectBuilder
 import org.gradle.tooling.internal.gradle.DefaultGradleProject
 import org.gradle.util.TestUtil
-import spock.lang.Specification
 
-class IdeaModelBuilderTest extends Specification {
-
+class IdeaModelBuilderTest extends AbstractProjectBuilderSpec {
     Project root
     Project child1
     Project child2
 
     def setup() {
-        root = TestUtil.builder().withName("root").build()
-        child1 = TestUtil.builder().withName("child1").withParent(root).build()
-        child2 = TestUtil.builder().withName("child2").withParent(root).build()
+        root = TestUtil.builder(temporaryFolder).withName("root").build()
+        child1 = ProjectBuilder.builder().withName("child1").withParent(root).build()
+        child2 = ProjectBuilder.builder().withName("child2").withParent(root).build()
         [root, child1, child2].each { it.pluginManager.apply(IdeaPlugin) }
     }
 
@@ -121,7 +124,7 @@ class IdeaModelBuilderTest extends Specification {
         ideaProject.modules.find { it.name == 'root'}.javaLanguageSettings.languageLevel == JavaVersion.VERSION_1_2
     }
 
-    def "explicit project language level results in inherited module language level"() {
+    def "explicit project language level does not affect module language level"() {
         given:
         root.plugins.apply(JavaPlugin)
         child1.plugins.apply(JavaPlugin)
@@ -136,9 +139,29 @@ class IdeaModelBuilderTest extends Specification {
 
         then:
         ideaProject.javaLanguageSettings.languageLevel == JavaVersion.VERSION_1_2
-        ideaProject.modules.find { it.name == 'root'}.javaLanguageSettings.languageLevel == null
-        ideaProject.modules.find { it.name == 'child1'}.javaLanguageSettings.languageLevel == null
-        ideaProject.modules.find { it.name == 'child2'}.javaLanguageSettings.languageLevel == null
+        ideaProject.modules.find { it.name == 'root'}.javaLanguageSettings.languageLevel == JavaVersion.VERSION_1_3
+        ideaProject.modules.find { it.name == 'child1'}.javaLanguageSettings.languageLevel == JavaVersion.VERSION_1_4
+        ideaProject.modules.find { it.name == 'child2'}.javaLanguageSettings.languageLevel == JavaVersion.VERSION_1_5
+    }
+
+    def "explicit project language level doesn't affect module bytecode level"() {
+        given:
+        root.plugins.apply(JavaPlugin)
+        child1.plugins.apply(JavaPlugin)
+        child2.plugins.apply(JavaPlugin)
+        root.idea.project.languageLevel = '1.2'
+        root.targetCompatibility = '1.3'
+        child1.targetCompatibility = '1.4'
+        child2.targetCompatibility = '1.5'
+
+        when:
+        def ideaProject = buildIdeaProjectModel()
+
+        then:
+        ideaProject.javaLanguageSettings.languageLevel == JavaVersion.VERSION_1_2
+        ideaProject.modules.find { it.name == 'root'}.javaLanguageSettings.targetBytecodeVersion == JavaVersion.VERSION_1_3
+        ideaProject.modules.find { it.name == 'child1'}.javaLanguageSettings.targetBytecodeVersion == JavaVersion.VERSION_1_4
+        ideaProject.modules.find { it.name == 'child2'}.javaLanguageSettings.targetBytecodeVersion == null
     }
 
     def "can handle multi project builds where no projects are Java projects"() {
@@ -272,7 +295,10 @@ class IdeaModelBuilderTest extends Specification {
     private IdeaModelBuilder createIdeaModelBuilder() {
         def gradleProjectBuilder = Mock(GradleProjectBuilder)
         gradleProjectBuilder.buildAll(_) >> Mock(DefaultGradleProject)
-        new IdeaModelBuilder(gradleProjectBuilder)
+        def serviceRegistry = new DefaultServiceRegistry()
+        serviceRegistry.add(LocalComponentRegistry, Stub(LocalComponentRegistry))
+        serviceRegistry.add(CompositeBuildContext, Stub(CompositeBuildContext))
+        new IdeaModelBuilder(gradleProjectBuilder, serviceRegistry)
     }
 
     private DefaultIdeaProject buildIdeaProject(modelBuilder, project) {

@@ -117,7 +117,7 @@
             There are several issues to be aware with the current implementation of continuous build.
             These are likely to be addressed in future Gradle releases.
         </para>
-        <section>
+        <section id="sec:build_cycles">
             <title>Build cycles</title>
             <para>
                 Gradle starts watching for changes just before a task executes.
@@ -133,16 +133,17 @@
                 In other cases, you can use <literal>--info</literal> logging to find the task that is out-of-date due to the identified files.
             </para>
         </section>
-        <section id="continuous_build_limitations_jdk">
-            <title>Requires Java 7 or later</title>
+        <section id="sec:continuous_build_limitations_jdk9">
+            <title>Restrictions with Java 9</title>
             <para>
-                Gradle uses the JDK's <ulink url="http://docs.oracle.com/javase/7/docs/api/java/nio/file/WatchService.html"><literal>WatchService</literal></ulink>
-                to receive notification of changes to files between builds.
-                This API was introduced in Java 7.
-                As such, Gradle's continuous build is not currently supported when building with Java 6.
+                Due to class access restrictions related to Java 9, Gradle cannot set some operating system specific options, which means that:
+                <itemizedlist>
+                    <listitem><para>On Mac OS X, Gradle will poll for file changes every 10 seconds instead of every 2 seconds.</para></listitem>
+                    <listitem><para>On Windows, Gradle must use individual file watches (like on Linux/Mac OS), which may cause continuous build to no longer work on very large projects.</para></listitem>
+                </itemizedlist>
             </para>
         </section>
-        <section>
+        <section id="sec:performance_and_stability">
             <title>Performance and stability</title>
             <para>
                 The JDK file watching facility relies on inefficient file system polling on Mac OS X (see: <ulink url="https://bugs.openjdk.java.net/browse/JDK-7133447">JDK-7133447</ulink>).
@@ -157,7 +158,7 @@
                 On Linux, OpenJDK's implementation of the file watch service can sometimes miss file system events (see: <ulink url="https://bugs.openjdk.java.net/browse/JDK-8145981">JDK-8145981</ulink>).
             </para>
         </section>
-        <section>
+        <section id="sec:changes_to_symbolic_links">
             <title>Changes to symbolic links</title>
             <para>
                 <itemizedlist>
@@ -169,7 +170,7 @@
                 </itemizedlist>
             </para>
         </section>
-        <section>
+        <section id="sec:changes_to_build_logic_are_not_considered">
             <title>Changes to build logic are not considered</title>
             <para>
                 The current implementation does not recalculate the build model on subsequent builds.

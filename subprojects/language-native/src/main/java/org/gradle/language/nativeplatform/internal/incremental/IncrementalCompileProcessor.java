@@ -109,7 +109,7 @@ public class IncrementalCompileProcessor {
 
             for (ResolvedInclude dep : newState.getResolvedIncludes()) {
                 if (dep.isUnknown()) {
-                    LOGGER.info(String.format("Cannot determine changed state of included '%s' in source file '%s'. Assuming changed.", dep.getInclude(), file.getName()));
+                    LOGGER.info("Cannot determine changed state of included '{}' in source file '{}'. Assuming changed.", dep.getInclude(), file.getName());
                     changed = true;
                 } else {
                     boolean depChanged = checkChangedAndUpdateState(dep.getFile());
@@ -123,7 +123,7 @@ public class IncrementalCompileProcessor {
         }
 
         private boolean sameHash(CompilationFileState previousState, CompilationFileState newState) {
-            return previousState != null && Arrays.equals(newState.getHash(), previousState.getHash());
+            return previousState != null && newState.getHash().equals(previousState.getHash());
         }
 
         private boolean sameResolved(CompilationFileState previousState, CompilationFileState newState) {

@@ -17,35 +17,44 @@
 package org.gradle.launcher.cli;
 
 import org.gradle.StartParameter;
-import org.gradle.api.internal.DocumentationRegistry;
 import org.gradle.cli.CommandLineConverter;
 import org.gradle.cli.CommandLineParser;
 import org.gradle.cli.ParsedCommandLine;
 import org.gradle.configuration.GradleLauncherMetaData;
 import org.gradle.internal.SystemProperties;
 import org.gradle.internal.classpath.ClassPath;
+import org.gradle.internal.jvm.inspection.JvmVersionDetector;
+import org.gradle.internal.logging.events.OutputEventListener;
 import org.gradle.internal.nativeintegration.services.NativeServices;
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.internal.service.ServiceRegistryBuilder;
 import org.gradle.internal.service.scopes.GlobalScopeServices;
 import org.gradle.launcher.daemon.bootstrap.ForegroundDaemonAction;
-import org.gradle.launcher.daemon.client.*;
-import org.gradle.launcher.daemon.configuration.CurrentProcess;
+import org.gradle.launcher.daemon.client.DaemonClient;
+import org.gradle.launcher.daemon.client.DaemonClientFactory;
+import org.gradle.launcher.daemon.client.DaemonClientGlobalServices;
+import org.gradle.launcher.daemon.client.DaemonStopClient;
+import org.gradle.launcher.daemon.client.ReportDaemonStatusClient;
+import org.gradle.launcher.daemon.configuration.BuildProcess;
 import org.gradle.launcher.daemon.configuration.DaemonParameters;
 import org.gradle.launcher.daemon.configuration.ForegroundDaemonConfiguration;
-import org.gradle.launcher.exec.*;
-import org.gradle.logging.StyledTextOutputFactory;
-import org.gradle.logging.internal.OutputEventListener;
+import org.gradle.launcher.exec.BuildActionExecuter;
+import org.gradle.launcher.exec.BuildActionParameters;
+import org.gradle.launcher.exec.BuildExecuter;
+import org.gradle.launcher.exec.DefaultBuildActionParameters;
 
 import java.lang.management.ManagementFactory;
+import java.util.UUID;
 
 class BuildActionsFactory implements CommandLineAction {
     private final CommandLineConverter<Parameters> parametersConverter;
     private final ServiceRegistry loggingServices;
+    private final JvmVersionDetector jvmVersionDetector;
 
-    BuildActionsFactory(ServiceRegistry loggingServices, CommandLineConverter<Parameters> parametersConverter) {
+    BuildActionsFactory(ServiceRegistry loggingServices, CommandLineConverter<Parameters> parametersConverter, JvmVersionDetector jvmVersionDetector) {
         this.loggingServices = loggingServices;
         this.parametersConverter = parametersConverter;
+        this.jvmVersionDetector = jvmVersionDetector;
     }
 
     public void configureCommandLineParser(CommandLineParser parser) {
@@ -54,19 +63,21 @@ class BuildActionsFactory implements CommandLineAction {
 
     public Runnable createAction(CommandLineParser parser, ParsedCommandLine commandLine) {
         Parameters parameters = parametersConverter.convert(commandLine, new Parameters());
-        parameters.getDaemonParameters().applyDefaultsFor(new JvmVersionDetector().getJavaVersion(parameters.getDaemonParameters().getEffectiveJvm()));
+        parameters.getDaemonParameters().applyDefaultsFor(jvmVersionDetector.getJavaVersion(parameters.getDaemonParameters().getEffectiveJvm()));
 
         if (parameters.getDaemonParameters().isStop()) {
             return stopAllDaemons(parameters.getDaemonParameters(), loggingServices);
         }
+        if (parameters.getDaemonParameters().isStatus()) {
+            return showDaemonStatus(parameters.getDaemonParameters(), loggingServices);
+        }
         if (parameters.getDaemonParameters().isForeground()) {
             DaemonParameters daemonParameters = parameters.getDaemonParameters();
-            daemonParameters.resetUid();
             ForegroundDaemonConfiguration conf = new ForegroundDaemonConfiguration(
-                    daemonParameters.getUid(), daemonParameters.getBaseDir(), daemonParameters.getIdleTimeout());
+                UUID.randomUUID().toString(), daemonParameters.getBaseDir(), daemonParameters.getIdleTimeout(), daemonParameters.getPeriodicCheckInterval());
             return new ForegroundDaemonAction(loggingServices, conf);
         }
-        if (parameters.getDaemonParameters().getDaemonUsage().isEnabled()) {
+        if (parameters.getDaemonParameters().isEnabled()) {
             return runBuildWithDaemon(parameters.getStartParameter(), parameters.getDaemonParameters(), loggingServices);
         }
         if (canUseCurrentProcess(parameters.getDaemonParameters())) {
@@ -83,6 +94,13 @@ class BuildActionsFactory implements CommandLineAction {
         return new StopDaemonAction(stopClient);
     }
 
+    private Runnable showDaemonStatus(DaemonParameters daemonParameters, ServiceRegistry loggingServices) {
+        ServiceRegistry clientSharedServices = createGlobalClientServices();
+        ServiceRegistry clientServices = clientSharedServices.get(DaemonClientFactory.class).createStopDaemonServices(loggingServices.get(OutputEventListener.class), daemonParameters);
+        ReportDaemonStatusClient statusClient = clientServices.get(ReportDaemonStatusClient.class);
+        return new ReportDaemonStatusAction(statusClient);
+    }
+
     private Runnable runBuildWithDaemon(StartParameter startParameter, DaemonParameters daemonParameters, ServiceRegistry loggingServices) {
         // Create a client that will match based on the daemon startup parameters.
         ServiceRegistry clientSharedServices = createGlobalClientServices();
@@ -92,7 +110,7 @@ class BuildActionsFactory implements CommandLineAction {
     }
 
     private boolean canUseCurrentProcess(DaemonParameters requiredBuildParameters) {
-        CurrentProcess currentProcess = new CurrentProcess();
+        BuildProcess currentProcess = new BuildProcess();
         return currentProcess.configureForBuild(requiredBuildParameters);
     }
 
@@ -104,12 +122,7 @@ class BuildActionsFactory implements CommandLineAction {
                 .provider(new GlobalScopeServices(startParameter.isContinuous()))
                 .build();
 
-        BuildActionExecuter<BuildActionParameters> executer = globalServices.get(BuildExecuter.class);
-        StyledTextOutputFactory textOutputFactory = globalServices.get(StyledTextOutputFactory.class);
-        DocumentationRegistry documentationRegistry = globalServices.get(DocumentationRegistry.class);
-        DaemonUsageSuggestingBuildActionExecuter daemonUsageSuggestingExecuter = new DaemonUsageSuggestingBuildActionExecuter(executer, textOutputFactory, documentationRegistry);
-
-        return runBuild(startParameter, daemonParameters, daemonUsageSuggestingExecuter, globalServices);
+        return runBuild(startParameter, daemonParameters, globalServices.get(BuildExecuter.class), globalServices);
     }
 
     private Runnable runBuildInSingleUseDaemon(StartParameter startParameter, DaemonParameters daemonParameters, ServiceRegistry loggingServices) {
@@ -139,13 +152,17 @@ class BuildActionsFactory implements CommandLineAction {
     }
 
     private Runnable runBuild(StartParameter startParameter, DaemonParameters daemonParameters, BuildActionExecuter<BuildActionParameters> executer, ServiceRegistry sharedServices) {
-        BuildActionParameters parameters = new DefaultBuildActionParameters(
+        BuildActionParameters parameters = createBuildActionParamters(startParameter, daemonParameters);
+        return new RunBuildAction(executer, startParameter, clientMetaData(), getBuildStartTime(), parameters, sharedServices);
+    }
+
+    private BuildActionParameters createBuildActionParamters(StartParameter startParameter, DaemonParameters daemonParameters) {
+        return new DefaultBuildActionParameters(
                 daemonParameters.getEffectiveSystemProperties(),
                 System.getenv(),
                 SystemProperties.getInstance().getCurrentDir(),
                 startParameter.getLogLevel(),
-                daemonParameters.getDaemonUsage(), startParameter.isContinuous(), daemonParameters.isInteractive(), ClassPath.EMPTY);
-        return new RunBuildAction(executer, startParameter, clientMetaData(), getBuildStartTime(), parameters, sharedServices);
+                daemonParameters.isEnabled(), startParameter.isContinuous(), daemonParameters.isInteractive(), ClassPath.EMPTY);
     }
 
     private long getBuildStartTime() {

@@ -40,24 +40,28 @@ import org.gradle.plugins.ide.internal.resolver.model.UnresolvedIdeRepoFileDepen
 import org.gradle.jvm.JvmLibrary;
 
 import java.io.File;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Set;
 
 public class IdeDependenciesExtractor {
 
     private final IdeDependencyResolver ideDependencyResolver = new DefaultIdeDependencyResolver();
 
     public Collection<IdeProjectDependency> extractProjectDependencies(Project project, Collection<Configuration> plusConfigurations, Collection<Configuration> minusConfigurations) {
-        LinkedHashMap<Project, IdeProjectDependency> deps = new LinkedHashMap<Project, IdeProjectDependency>();
+        LinkedHashMap<String, IdeProjectDependency> deps = new LinkedHashMap<String, IdeProjectDependency>();
 
         for (Configuration plusConfiguration : plusConfigurations) {
             for (IdeProjectDependency dep : ideDependencyResolver.getIdeProjectDependencies(plusConfiguration, project)) {
-                deps.put(dep.getProject(), dep);
+                deps.put(dep.getProjectPath(), dep);
             }
         }
 
         for (Configuration minusConfiguration : minusConfigurations) {
             for (IdeProjectDependency dep : ideDependencyResolver.getIdeProjectDependencies(minusConfiguration, project)) {
-                deps.remove(dep.getProject());
+                deps.remove(dep.getProjectPath());
             }
         }
 
